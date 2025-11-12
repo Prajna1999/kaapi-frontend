@@ -8,84 +8,11 @@
 
 "use client"
 import { useState, useEffect } from 'react';
-import useSWR from 'swr';
 import { useRouter } from 'next/navigation'
 import { APIKey } from '../keystore/page';
 import { STORAGE_KEY } from '../keystore/page';
 
-// Dummy evaluation results data
-const DUMMY_RESULTS = {
-  evaluationId: 'eval_12345',
-  timestamp: new Date().toISOString(),
-  dataset: {
-    name: 'medical_qa_v1.csv',
-    totalRows: 150,
-    processedRows: 150,
-  },
-  metrics: {
-    averageScore: 0.87,
-    accuracy: 0.92,
-    precision: 0.89,
-    recall: 0.85,
-    f1Score: 0.87,
-  },
-  modelInfo: {
-    provider: 'OpenAI',
-    model: 'gpt-4-turbo',
-    temperature: 0.7,
-  },
-  logs: [
-    {
-      id: 1,
-      question: 'What is the primary function of the mitochondria?',
-      expected: 'Energy production through ATP synthesis',
-      actual: 'The mitochondria is responsible for ATP synthesis and cellular energy production',
-      score: 0.95,
-      status: 'pass',
-      timestamp: '2025-11-06T10:23:45Z',
-    },
-    {
-      id: 2,
-      question: 'Describe the process of protein synthesis.',
-      expected: 'Transcription of DNA to mRNA, then translation to protein',
-      actual: 'Protein synthesis involves transcription followed by translation at the ribosome',
-      score: 0.92,
-      status: 'pass',
-      timestamp: '2025-11-06T10:23:46Z',
-    },
-    {
-      id: 3,
-      question: 'What are the main components of the cell membrane?',
-      expected: 'Phospholipid bilayer with embedded proteins',
-      actual: 'The cell membrane consists of a phospholipid bilayer',
-      score: 0.78,
-      status: 'pass',
-      timestamp: '2025-11-06T10:23:47Z',
-    },
-    {
-      id: 4,
-      question: 'Explain the role of DNA polymerase.',
-      expected: 'Synthesizes new DNA strands during replication',
-      actual: 'DNA polymerase helps in replication',
-      score: 0.65,
-      status: 'warning',
-      timestamp: '2025-11-06T10:23:48Z',
-    },
-    {
-      id: 5,
-      question: 'What is osmosis?',
-      expected: 'Movement of water across a semi-permeable membrane',
-      actual: 'Movement of molecules across membranes',
-      score: 0.55,
-      status: 'fail',
-      timestamp: '2025-11-06T10:23:49Z',
-    },
-  ],
-};
-
 type Tab = 'upload' | 'results';
-
-const fetcher=(url)=>fetch(url).then((r)=>r.json())
 
 export default function SimplifiedEval() {
   const [activeTab, setActiveTab] = useState<Tab>('upload');
@@ -93,8 +20,6 @@ export default function SimplifiedEval() {
   const [datasetId, setDatasetId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
-  const [evaluationResults, setEvaluationResults] = useState(DUMMY_RESULTS);
-  const [progress, setProgress] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
   const [selectedKeyId, setSelectedKeyId] = useState<string>('');
@@ -126,31 +51,13 @@ export default function SimplifiedEval() {
     }
   }, []);
 
-  // Simulate evaluation progress
-  useEffect(() => {
-    if (isEvaluating) {
-      const interval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            setIsEvaluating(false);
-            setActiveTab('results');
-            return 100;
-          }
-          return prev + 10;
-        });
-      }, 300);
-      return () => clearInterval(interval);
-    }
-  }, [isEvaluating]);
-
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     if (!selectedKeyId) {
       alert('Please select an API key first');
-      event.target.value = ''; // Reset file input
+      event.target.value = '';
       return;
     }
 
@@ -255,7 +162,6 @@ export default function SimplifiedEval() {
       return;
     }
 
-    setProgress(0);
     setIsEvaluating(true);
 
     try {
@@ -310,15 +216,18 @@ export default function SimplifiedEval() {
       }
 
       const data = await response.json();
-      setEvaluationResults(data);
-      setProgress(100);
+      console.log('Evaluation job created:', data);
+
+      // Redirect to results tab to view evaluation status
       setIsEvaluating(false);
       setActiveTab('results');
+
+      // Show success message
+      alert(`Evaluation job created successfully! Job ID: ${data.id}`);
     } catch(error) {
       console.error('Error:', error);
       alert(`Failed to run evaluation: ${error.message}`);
       setIsEvaluating(false);
-      setProgress(0);
     }
   };
 
@@ -372,7 +281,7 @@ export default function SimplifiedEval() {
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
               </svg>
-              Kaapi Keystore
+              Keystore
             </button>
           </nav>
         </aside>
@@ -449,7 +358,6 @@ export default function SimplifiedEval() {
                   datasetId={datasetId}
                   isUploading={isUploading}
                   isEvaluating={isEvaluating}
-                  progress={progress}
                   apiKeys={apiKeys}
                   selectedKeyId={selectedKeyId}
                   datasetName={datasetName}
@@ -474,7 +382,7 @@ export default function SimplifiedEval() {
                   onRunEvaluation={handleRunEvaluation}
                 />
               ) : (
-                <ResultsTab results={evaluationResults} />
+                <ResultsTab apiKeys={apiKeys} selectedKeyId={selectedKeyId} />
               )}
             </div>
           </div>
@@ -490,7 +398,6 @@ interface UploadTabProps {
   datasetId: string | null;
   isUploading: boolean;
   isEvaluating: boolean;
-  progress: number;
   apiKeys: APIKey[];
   selectedKeyId: string;
   datasetName: string;
@@ -520,7 +427,6 @@ function UploadTab({
   datasetId,
   isUploading,
   isEvaluating,
-  progress,
   apiKeys,
   selectedKeyId,
   datasetName,
@@ -590,7 +496,7 @@ function UploadTab({
                 className="inline-block px-4 py-2 rounded-md text-sm font-medium transition-colors"
                 style={{ backgroundColor: 'hsl(167, 59%, 22%)', color: 'hsl(0, 0%, 100%)' }}
               >
-                Go to Kaapi Keystore
+                Go to Keystore
               </a>
             </div>
           </div>
@@ -646,8 +552,6 @@ function UploadTab({
               className="border-2 border-dashed rounded-lg p-12 text-center transition-colors"
               style={{
                 borderColor: 'hsl(0, 0%, 85%)',
-                opacity: !selectedKeyId ? 0.5 : 1,
-                pointerEvents: !selectedKeyId ? 'none' : 'auto'
               }}
             >
               <div className="space-y-4">
@@ -937,56 +841,34 @@ function UploadTab({
         <div className="mt-6">
           <button
             onClick={onRunEvaluation}
-            disabled={!selectedKeyId || !datasetId || !experimentName.trim() || isEvaluating || isUploading}
+            disabled={!datasetId || !experimentName.trim() || isEvaluating || isUploading}
             className="w-full py-3 rounded-md font-medium text-sm transition-all"
             style={{
-              backgroundColor: !selectedKeyId || !datasetId || !experimentName.trim() || isEvaluating || isUploading ? 'hsl(0, 0%, 95%)' : 'hsl(167, 59%, 22%)',
-              color: !selectedKeyId || !datasetId || !experimentName.trim() || isEvaluating || isUploading ? 'hsl(330, 3%, 49%)' : 'hsl(0, 0%, 100%)',
-              cursor: !selectedKeyId || !datasetId || !experimentName.trim() || isEvaluating || isUploading ? 'not-allowed' : 'pointer',
-              borderWidth: !selectedKeyId || !datasetId || !experimentName.trim() || isEvaluating || isUploading ? '1px' : '0',
-              borderColor: !selectedKeyId || !datasetId || !experimentName.trim() || isEvaluating || isUploading ? 'hsl(0, 0%, 85%)' : 'transparent'
+              backgroundColor: !datasetId || !experimentName.trim() || isEvaluating || isUploading ? 'hsl(0, 0%, 95%)' : 'hsl(167, 59%, 22%)',
+              color: !datasetId || !experimentName.trim() || isEvaluating || isUploading ? 'hsl(330, 3%, 49%)' : 'hsl(0, 0%, 100%)',
+              cursor: !datasetId || !experimentName.trim() || isEvaluating || isUploading ? 'not-allowed' : 'pointer',
+              borderWidth: !datasetId || !experimentName.trim() || isEvaluating || isUploading ? '1px' : '0',
+              borderColor: !datasetId || !experimentName.trim() || isEvaluating || isUploading ? 'hsl(0, 0%, 85%)' : 'transparent'
             }}
           >
-            {isEvaluating ? 'Evaluating...' : 'Run Evaluation'}
+            {isEvaluating ? 'Creating Evaluation Job...' : 'Run Evaluation'}
           </button>
-          {!selectedKeyId && (
-            <p className="text-xs mt-2 text-center" style={{ color: 'hsl(8, 86%, 40%)' }}>
-              Please select an API key to continue
-            </p>
-          )}
-          {selectedKeyId && !datasetId && !isUploading && (
+          {!datasetId && !isUploading && (
             <p className="text-xs mt-2 text-center" style={{ color: 'hsl(8, 86%, 40%)' }}>
               Please upload a dataset file first
             </p>
           )}
-          {selectedKeyId && datasetId && !experimentName.trim() && (
+          {datasetId && !experimentName.trim() && (
             <p className="text-xs mt-2 text-center" style={{ color: 'hsl(8, 86%, 40%)' }}>
               Please enter an experiment name
             </p>
           )}
+          {isEvaluating && (
+            <p className="text-xs mt-2 text-center" style={{ color: 'hsl(330, 3%, 49%)' }}>
+              Creating evaluation job and redirecting to results...
+            </p>
+          )}
         </div>
-
-        {/* Progress Bar */}
-        {isEvaluating && (
-          <div className="mt-6">
-            <div className="flex justify-between text-sm mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>
-              <span>Processing pipeline...</span>
-              <span className="font-medium">{progress}%</span>
-            </div>
-            <div className="w-full rounded-full h-2 overflow-hidden" style={{ backgroundColor: 'hsl(0, 0%, 91%)' }}>
-              <div
-                className="h-full transition-all duration-300"
-                style={{ width: `${progress}%`, backgroundColor: 'hsl(167, 59%, 22%)' }}
-              />
-            </div>
-            <div className="mt-3 text-sm text-center" style={{ color: 'hsl(330, 3%, 49%)' }}>
-              {progress < 30 && '📂 Loading dataset...'}
-              {progress >= 30 && progress < 60 && '🤖 Running LLM evaluation...'}
-              {progress >= 60 && progress < 90 && '📊 Calculating metrics...'}
-              {progress >= 90 && '✅ Finalizing results...'}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Sample CSV Format */}
@@ -1002,171 +884,349 @@ function UploadTab({
   );
 }
 
+// ============ TYPES ============
+interface EvalJob {
+  id: number;
+  run_name: string;
+  dataset_name: string;
+  dataset_id: number;
+  batch_job_id: number;
+  embedding_batch_job_id: number | null;
+  status: string;
+  object_store_url: string | null;
+  total_items: number;
+  score: number | null;
+  error_message: string | null;
+  config: {
+    model?: string;
+    instructions?: string;
+    tools?: any[];
+    include?: string[];
+  };
+  organization_id: number;
+  project_id: number;
+  inserted_at: string;
+  updated_at: string;
+}
+
 // ============ RESULTS TAB COMPONENT ============
 interface ResultsTabProps {
-  results: typeof DUMMY_RESULTS;
+  apiKeys: APIKey[];
+  selectedKeyId: string;
 }
 
-function ResultsTab({ results }: ResultsTabProps) {
+function ResultsTab({ apiKeys, selectedKeyId }: ResultsTabProps) {
+  const [evalJobs, setEvalJobs] = useState<EvalJob[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch evaluation jobs
+  const fetchEvaluations = async () => {
+    if (!selectedKeyId) {
+      setError('Please select an API key first');
+      return;
+    }
+
+    const selectedKey = apiKeys.find(k => k.id === selectedKeyId);
+    if (!selectedKey) {
+      setError('Selected API key not found');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/evaluations', {
+        method: 'GET',
+        headers: {
+          'X-API-KEY': selectedKey.key,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || `Failed to fetch evaluations: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // API may return an array or an object with data property
+      const jobs = Array.isArray(data) ? data : (data.data || []);
+      setEvalJobs(jobs);
+    } catch (err: any) {
+      console.error('Failed to fetch evaluations:', err);
+      setError(err.message || 'Failed to fetch evaluation jobs');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch on mount and when API key changes
+  useEffect(() => {
+    if (selectedKeyId) {
+      fetchEvaluations();
+    }
+  }, [selectedKeyId]);
+
+  // Auto-refresh every 10 seconds if there are processing jobs
+  useEffect(() => {
+    const hasProcessingJobs = evalJobs.some(job =>
+      job.status === 'processing' || job.status === 'pending' || job.status === 'queued'
+    );
+
+    if (hasProcessingJobs) {
+      const interval = setInterval(() => {
+        fetchEvaluations();
+      }, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [evalJobs, selectedKeyId]);
+
   return (
     <div className="space-y-6">
-      {/* Metrics Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <MetricCard
-          title="Average Score"
-          value={(results.metrics.averageScore * 100).toFixed(1) + '%'}
-          icon="📊"
-          color="blue"
-        />
-        <MetricCard
-          title="Accuracy"
-          value={(results.metrics.accuracy * 100).toFixed(1) + '%'}
-          icon="🎯"
-          color="green"
-        />
-        <MetricCard
-          title="F1 Score"
-          value={(results.metrics.f1Score * 100).toFixed(1) + '%'}
-          icon="⚡"
-          color="purple"
-        />
+      {/* Header with refresh button */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>
+          Evaluation Jobs
+        </h2>
+        <button
+          onClick={fetchEvaluations}
+          disabled={isLoading || !selectedKeyId}
+          className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+          style={{
+            backgroundColor: isLoading || !selectedKeyId ? 'hsl(0, 0%, 95%)' : 'hsl(167, 59%, 22%)',
+            color: isLoading || !selectedKeyId ? 'hsl(330, 3%, 49%)' : 'hsl(0, 0%, 100%)',
+            cursor: isLoading || !selectedKeyId ? 'not-allowed' : 'pointer'
+          }}
+        >
+          {isLoading ? 'Refreshing...' : '🔄 Refresh'}
+        </button>
       </div>
 
-      {/* Dataset Info */}
-      <div className="border rounded-lg p-6" style={{ backgroundColor: 'hsl(0, 0%, 100%)', borderColor: 'hsl(0, 0%, 85%)' }}>
-        <h2 className="text-xl font-semibold mb-4" style={{ color: 'hsl(330, 3%, 19%)' }}>Evaluation Summary</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <InfoItem label="Dataset" value={results.dataset.name} />
-          <InfoItem label="Total Rows" value={results.dataset.totalRows.toString()} />
-          <InfoItem label="Model" value={results.modelInfo.model} />
-          <InfoItem label="Temperature" value={results.modelInfo.temperature.toString()} />
+      {/* No API Key Selected */}
+      {!selectedKeyId && (
+        <div className="border rounded-lg p-8 text-center" style={{ backgroundColor: 'hsl(0, 0%, 100%)', borderColor: 'hsl(0, 0%, 85%)' }}>
+          <p style={{ color: 'hsl(330, 3%, 49%)' }}>Please select an API key from the Upload tab to view evaluation jobs.</p>
         </div>
-      </div>
+      )}
 
-      {/* Detailed Logs */}
-      <div className="border rounded-lg p-6" style={{ backgroundColor: 'hsl(0, 0%, 100%)', borderColor: 'hsl(0, 0%, 85%)' }}>
-        <h2 className="text-xl font-semibold mb-4" style={{ color: 'hsl(330, 3%, 19%)' }}>Detailed Evaluation Logs</h2>
-        <div className="space-y-3">
-          {results.logs.map((log) => (
-            <LogItem key={log.id} log={log} />
+      {/* Loading State */}
+      {isLoading && selectedKeyId && evalJobs.length === 0 && (
+        <div className="border rounded-lg p-8 text-center" style={{ backgroundColor: 'hsl(0, 0%, 100%)', borderColor: 'hsl(0, 0%, 85%)' }}>
+          <p style={{ color: 'hsl(330, 3%, 49%)' }}>Loading evaluation jobs...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="border rounded-lg p-6" style={{ backgroundColor: 'hsl(8, 86%, 95%)', borderColor: 'hsl(8, 86%, 80%)' }}>
+          <p className="text-sm font-medium" style={{ color: 'hsl(8, 86%, 40%)' }}>
+            Error: {error}
+          </p>
+        </div>
+      )}
+
+      {/* No Jobs Yet */}
+      {!isLoading && selectedKeyId && evalJobs.length === 0 && !error && (
+        <div className="border rounded-lg p-8 text-center" style={{ backgroundColor: 'hsl(0, 0%, 100%)', borderColor: 'hsl(0, 0%, 85%)' }}>
+          <p style={{ color: 'hsl(330, 3%, 49%)' }}>No evaluation jobs found. Create one from the Upload tab!</p>
+        </div>
+      )}
+
+      {/* Evaluation Job Cards */}
+      {evalJobs.length > 0 && (
+        <div className="space-y-4">
+          {evalJobs.map((job) => (
+            <EvalJobCard key={job.id} job={job} />
           ))}
         </div>
-      </div>
-
-      {/* Export Actions */}
-      <div className="border rounded-lg p-6" style={{ backgroundColor: 'hsl(0, 0%, 100%)', borderColor: 'hsl(0, 0%, 85%)' }}>
-        <h3 className="text-lg font-semibold mb-4" style={{ color: 'hsl(330, 3%, 19%)' }}>Export Results</h3>
-        <div className="flex gap-3">
-          <button
-            className="px-4 py-2 rounded-md transition-colors text-sm font-medium"
-            style={{ backgroundColor: 'hsl(167, 59%, 22%)', color: 'hsl(0, 0%, 100%)' }}
-          >
-            📥 Download CSV
-          </button>
-          <button
-            className="px-4 py-2 rounded-md transition-colors text-sm font-medium"
-            style={{
-              borderWidth: '1px',
-              borderColor: 'hsl(0, 0%, 85%)',
-              backgroundColor: 'hsl(0, 0%, 100%)',
-              color: 'hsl(330, 3%, 19%)'
-            }}
-          >
-            📋 Copy to Clipboard
-          </button>
-          <button
-            className="px-4 py-2 rounded-md transition-colors text-sm font-medium"
-            style={{
-              borderWidth: '1px',
-              borderColor: 'hsl(0, 0%, 85%)',
-              backgroundColor: 'hsl(0, 0%, 100%)',
-              color: 'hsl(330, 3%, 19%)'
-            }}
-          >
-            📤 Export to Langfuse
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
 
-// ============ HELPER COMPONENTS ============
-interface MetricCardProps {
-  title: string;
-  value: string;
-  icon: string;
-  color: 'blue' | 'green' | 'purple';
+// ============ EVAL JOB CARD COMPONENT ============
+interface EvalJobCardProps {
+  job: EvalJob;
 }
 
-function MetricCard({ title, value, icon, color }: MetricCardProps) {
-  const colorClasses = {
-    blue: { bg: 'hsl(0, 0%, 100%)', border: 'hsl(0, 0%, 85%)', text: 'hsl(330, 3%, 19%)' },
-    green: { bg: 'hsl(134, 61%, 95%)', border: 'hsl(134, 61%, 70%)', text: 'hsl(134, 61%, 25%)' },
-    purple: { bg: 'hsl(0, 0%, 100%)', border: 'hsl(0, 0%, 85%)', text: 'hsl(330, 3%, 19%)' },
+function EvalJobCard({ job }: EvalJobCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'completed':
+      case 'success':
+        return { bg: 'hsl(134, 61%, 95%)', border: 'hsl(134, 61%, 70%)', text: 'hsl(134, 61%, 25%)' };
+      case 'processing':
+      case 'pending':
+      case 'queued':
+        return { bg: 'hsl(46, 100%, 95%)', border: 'hsl(46, 100%, 80%)', text: 'hsl(46, 100%, 25%)' };
+      case 'failed':
+      case 'error':
+        return { bg: 'hsl(8, 86%, 95%)', border: 'hsl(8, 86%, 80%)', text: 'hsl(8, 86%, 40%)' };
+      default:
+        return { bg: 'hsl(0, 0%, 100%)', border: 'hsl(0, 0%, 85%)', text: 'hsl(330, 3%, 49%)' };
+    }
+  };
+
+  const statusColors = getStatusColor(job.status);
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
   };
 
   return (
-    <div className="border rounded-lg p-6" style={{ backgroundColor: colorClasses[color].bg, borderColor: colorClasses[color].border }}>
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-2xl">{icon}</span>
-        <span className="text-xs font-medium" style={{ color: 'hsl(330, 3%, 49%)' }}>Live</span>
-      </div>
-      <div className="text-3xl font-semibold" style={{ color: colorClasses[color].text }}>{value}</div>
-      <div className="text-sm mt-2" style={{ color: 'hsl(330, 3%, 49%)' }}>{title}</div>
-    </div>
-  );
-}
+    <div className="border rounded-lg" style={{ backgroundColor: 'hsl(0, 0%, 100%)', borderColor: 'hsl(0, 0%, 85%)' }}>
+      {/* Header - Always Visible (Clickable) */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full p-4 flex items-center justify-between transition-colors"
+        style={{
+          backgroundColor: isExpanded ? 'hsl(0, 0%, 96.5%)' : 'transparent',
+        }}
+        onMouseEnter={(e) => {
+          if (!isExpanded) e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 98%)';
+        }}
+        onMouseLeave={(e) => {
+          if (!isExpanded) e.currentTarget.style.backgroundColor = 'transparent';
+        }}
+      >
+        <div className="flex items-center gap-4 flex-1">
+          {/* Expand/Collapse Icon */}
+          <svg
+            className="w-5 h-5 flex-shrink-0 transition-transform"
+            style={{
+              color: 'hsl(330, 3%, 49%)',
+              transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)'
+            }}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
 
-interface InfoItemProps {
-  label: string;
-  value: string;
-}
+          {/* Job Info */}
+          <div className="flex-1 text-left">
+            <div className="flex items-center gap-3">
+              <h3 className="font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                {job.run_name}
+              </h3>
+              <span className="text-xs" style={{ color: 'hsl(330, 3%, 49%)' }}>
+                ID: {job.id}
+              </span>
+            </div>
+            <div className="flex items-center gap-4 mt-1 text-sm" style={{ color: 'hsl(330, 3%, 49%)' }}>
+              <span>{job.dataset_name}</span>
+              <span>•</span>
+              <span>{job.total_items} items</span>
+              {job.score !== null && (
+                <>
+                  <span>•</span>
+                  <span className="font-medium">{(job.score * 100).toFixed(1)}% score</span>
+                </>
+              )}
+            </div>
+          </div>
 
-function InfoItem({ label, value }: InfoItemProps) {
-  return (
-    <div>
-      <div className="text-xs uppercase font-semibold" style={{ color: 'hsl(330, 3%, 49%)' }}>{label}</div>
-      <div className="text-lg font-medium mt-1" style={{ color: 'hsl(330, 3%, 19%)' }}>{value}</div>
-    </div>
-  );
-}
-
-interface LogItemProps {
-  log: typeof DUMMY_RESULTS.logs[0];
-}
-
-function LogItem({ log }: LogItemProps) {
-  const statusColors = {
-    pass: { bg: 'hsl(134, 61%, 95%)', border: 'hsl(134, 61%, 70%)', text: 'hsl(134, 61%, 25%)' },
-    warning: { bg: 'hsl(46, 100%, 95%)', border: 'hsl(46, 100%, 80%)', text: 'hsl(46, 100%, 25%)' },
-    fail: { bg: 'hsl(8, 86%, 95%)', border: 'hsl(8, 86%, 80%)', text: 'hsl(8, 86%, 40%)' },
-  };
-
-  return (
-    <div className="border rounded-lg p-4" style={{ backgroundColor: statusColors[log.status].bg, borderColor: statusColors[log.status].border }}>
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <div className="font-semibold text-sm mb-1" style={{ color: statusColors[log.status].text }}>Question #{log.id}</div>
-          <div className="text-sm" style={{ color: 'hsl(330, 3%, 19%)' }}>{log.question}</div>
+          {/* Status Badge */}
+          <div
+            className="px-3 py-1 rounded-md text-sm font-medium"
+            style={{
+              backgroundColor: statusColors.bg,
+              borderWidth: '1px',
+              borderColor: statusColors.border,
+              color: statusColors.text
+            }}
+          >
+            {job.status.toUpperCase()}
+          </div>
         </div>
-        <div className="ml-4 flex items-center gap-2">
-          <span className="text-lg font-semibold" style={{ color: statusColors[log.status].text }}>{(log.score * 100).toFixed(0)}%</span>
-          <span className="text-xl">
-            {log.status === 'pass' ? '✅' : log.status === 'warning' ? '⚠️' : '❌'}
-          </span>
+      </button>
+
+      {/* Expanded Content */}
+      {isExpanded && (
+        <div className="px-4 pb-4 border-t" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
+          {/* Job Details Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 mb-4">
+            <div>
+              <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Dataset ID</div>
+              <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.dataset_id}</div>
+            </div>
+            <div>
+              <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Batch Job ID</div>
+              <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.batch_job_id}</div>
+            </div>
+            <div>
+              <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Model</div>
+              <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                {job.config?.model || 'N/A'}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Organization ID</div>
+              <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.organization_id}</div>
+            </div>
+          </div>
+
+          {/* Config Details (if available) */}
+          {job.config && (job.config.instructions || job.config.tools) && (
+            <div className="border-t pt-4 mb-4" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
+              <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Configuration</div>
+              {job.config.instructions && (
+                <div className="text-sm mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                  <span className="font-medium">Instructions:</span> {job.config.instructions}
+                </div>
+              )}
+              {job.config.tools && job.config.tools.length > 0 && (
+                <div className="text-sm" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                  <span className="font-medium">Tools:</span> {job.config.tools.map(t => t.type).join(', ')}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Error message (if failed) */}
+          {job.error_message && (
+            <div className="border-t pt-4 mb-4" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
+              <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(8, 86%, 40%)' }}>Error</div>
+              <div className="text-sm" style={{ color: 'hsl(8, 86%, 40%)' }}>
+                {job.error_message}
+              </div>
+            </div>
+          )}
+
+          {/* Timestamps */}
+          <div className="border-t pt-4 flex items-center justify-between text-xs" style={{ borderColor: 'hsl(0, 0%, 85%)', color: 'hsl(330, 3%, 49%)' }}>
+            <div>
+              <span className="font-medium">Created:</span> {formatDate(job.inserted_at)}
+            </div>
+            <div>
+              <span className="font-medium">Updated:</span> {formatDate(job.updated_at)}
+            </div>
+          </div>
+
+          {/* Actions */}
+          {job.object_store_url && (
+            <div className="border-t pt-4 mt-4" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
+              <a
+                href={job.object_store_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-md text-sm font-medium inline-block transition-colors"
+                style={{
+                  backgroundColor: 'hsl(167, 59%, 22%)',
+                  color: 'hsl(0, 0%, 100%)'
+                }}
+              >
+                View Results
+              </a>
+            </div>
+          )}
         </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 text-sm">
-        <div>
-          <div className="font-medium mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Expected:</div>
-          <div style={{ color: 'hsl(330, 3%, 19%)' }}>{log.expected}</div>
-        </div>
-        <div>
-          <div className="font-medium mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Actual:</div>
-          <div style={{ color: 'hsl(330, 3%, 19%)' }}>{log.actual}</div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
