@@ -1,0 +1,73 @@
+{
+    "cosine_similarity": {
+        "avg": 0.5687263700870495, //show the average and std to the user
+        "std": 0.10842963051331153,
+        "total_pairs": 16,
+        "per_item_scores": [
+            {
+                "trace_id": "eb20f767-4ede-47fe-a63f-5852b9eb68ed",
+                "cosine_similarity": 0.6871883188105149
+            },
+            {
+                "trace_id": "7565f0c2-25f5-403f-8315-fb363420ca49",
+                "cosine_similarity": 0.46126594344912164
+            },
+            {
+                "trace_id": "20f42513-4cf9-40e4-930a-8470ff1a22a7",
+                "cosine_similarity": 0.6446542965396557
+            },
+            {
+                "trace_id": "f692593b-81c3-4f9b-bb46-6dbe2b1c766c",
+                "cosine_similarity": 0.46120519725439024
+            },
+            {
+                "trace_id": "9dc021cc-d78f-4c34-b659-1dfb1a736517",
+                "cosine_similarity": 0.6650813181568475
+            },
+            {
+                "trace_id": "85279581-2c33-407d-8ee3-294a2f385044",
+                "cosine_similarity": 0.46124023257743163
+            },
+            {
+                "trace_id": "3897ce10-041b-4205-ab52-923ca643dd57",
+                "cosine_similarity": 0.6618396771024554
+            },
+            {
+                "trace_id": "b060b217-dcf8-4173-813c-081c407f684c",
+                "cosine_similarity": 0.6984795184310869
+            },
+            {
+                "trace_id": "967fc160-5591-4be2-925a-7804256b7673",
+                "cosine_similarity": 0.7057062301313111
+            },
+            {
+                "trace_id": "7ac1a6e7-eb96-40b4-9765-80470de9675a",
+                "cosine_similarity": 0.6578021199890051
+            },
+            {
+                "trace_id": "4c72858e-15c0-4b70-96ec-b615361d30b4",
+                "cosine_similarity": 0.6888293517053641
+            },
+            {
+                "trace_id": "c309dbb2-f40c-4334-b9ec-8e773e2bb048",
+                "cosine_similarity": 0.46126594344912164
+            },
+            {
+                "trace_id": "b15c2a6f-884e-4e23-aeb4-b3391a20e6fb",
+                "cosine_similarity": 0.46126594344912164
+            },
+            {
+                "trace_id": "a995898f-4042-45b7-b864-e3dde8c44b34",
+                "cosine_similarity": 0.46126594344912164
+            },
+            {
+                "trace_id": "91b2c87d-d5ac-47a3-8736-df791fcbc5bd",
+                "cosine_similarity": 0.46126594344912164
+            },
+            {
+                "trace_id": "00dd9a33-dc59-48e7-8f50-ff6f6eb7237f",
+                "cosine_similarity": 0.46126594344912164
+            }
+        ]
+    }
+}
