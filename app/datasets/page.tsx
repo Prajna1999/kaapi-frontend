@@ -135,9 +135,11 @@ export default function Datasets() {
       formData.append('file', selectedFile);
       formData.append('dataset_name', datasetName.trim());
 
-      if (duplicationFactor && parseInt(duplicationFactor) > 1) {
-        formData.append('duplication_factor', duplicationFactor);
+      if (duplicationFactor===""){
+        formData.append('duplication_factor', '1')
       }
+          
+      formData.append('duplication_factor', duplicationFactor || '1');
 
       // Upload to backend
       const response = await fetch('/api/evaluations/datasets', {
@@ -798,7 +800,7 @@ export function UploadDatasetModal({
               <div>
                 <p className="text-xs font-medium mb-1" style={{ color: 'hsl(202, 100%, 25%)' }}>Expected CSV Format:</p>
                 <pre className="text-xs font-mono" style={{ color: 'hsl(202, 100%, 30%)' }}>
-{`question,expected_answer
+{`question,answer
 "What is X?","Answer Y"`}
                 </pre>
               </div>

@@ -7,7 +7,7 @@
  */
 
 "use client"
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation'
 import { APIKey } from '../keystore/page';
 import { STORAGE_KEY } from '../keystore/page';
@@ -763,29 +763,29 @@ function UploadTab({
             {/* Play Button */}
             <button
               onClick={onRunEvaluation}
-              disabled={!selectedDatasetId || !experimentName.trim() || isEvaluating}
+              disabled={!selectedDatasetId || !experimentName.trim() || isEvaluating || (!useAssistantId && (!modelName.trim() || !instructions.trim())) || (useAssistantId && !assistantId.trim())}
               className="rounded-full p-4 transition-all shadow-md hover:shadow-lg"
               style={{
-                backgroundColor: !selectedDatasetId || !experimentName.trim() || isEvaluating ? 'hsl(0, 0%, 95%)' : 'hsl(167, 59%, 22%)',
-                color: !selectedDatasetId || !experimentName.trim() || isEvaluating ? 'hsl(330, 3%, 49%)' : 'hsl(0, 0%, 100%)',
-                cursor: !selectedDatasetId || !experimentName.trim() || isEvaluating ? 'not-allowed' : 'pointer',
-                borderWidth: !selectedDatasetId || !experimentName.trim() || isEvaluating ? '1px' : '0',
-                borderColor: !selectedDatasetId || !experimentName.trim() || isEvaluating ? 'hsl(0, 0%, 85%)' : 'transparent',
+                backgroundColor: !selectedDatasetId || !experimentName.trim() || isEvaluating || (!useAssistantId && (!modelName.trim() || !instructions.trim())) || (useAssistantId && !assistantId.trim()) ? 'hsl(0, 0%, 95%)' : 'hsl(167, 59%, 22%)',
+                color: !selectedDatasetId || !experimentName.trim() || isEvaluating || (!useAssistantId && (!modelName.trim() || !instructions.trim())) || (useAssistantId && !assistantId.trim()) ? 'hsl(330, 3%, 49%)' : 'hsl(0, 0%, 100%)',
+                cursor: !selectedDatasetId || !experimentName.trim() || isEvaluating || (!useAssistantId && (!modelName.trim() || !instructions.trim())) || (useAssistantId && !assistantId.trim()) ? 'not-allowed' : 'pointer',
+                borderWidth: !selectedDatasetId || !experimentName.trim() || isEvaluating || (!useAssistantId && (!modelName.trim() || !instructions.trim())) || (useAssistantId && !assistantId.trim()) ? '1px' : '0',
+                borderColor: !selectedDatasetId || !experimentName.trim() || isEvaluating || (!useAssistantId && (!modelName.trim() || !instructions.trim())) || (useAssistantId && !assistantId.trim()) ? 'hsl(0, 0%, 85%)' : 'transparent',
                 transform: isEvaluating ? 'scale(0.95)' : 'scale(1)'
               }}
               onMouseEnter={(e) => {
-                if (selectedDatasetId && experimentName.trim() && !isEvaluating) {
+                if (selectedDatasetId && experimentName.trim() && !isEvaluating && ((useAssistantId && assistantId.trim()) || (!useAssistantId && modelName.trim() && instructions.trim()))) {
                   e.currentTarget.style.transform = 'scale(1.05)';
                   e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 28%)';
                 }
               }}
               onMouseLeave={(e) => {
-                if (selectedDatasetId && experimentName.trim() && !isEvaluating) {
+                if (selectedDatasetId && experimentName.trim() && !isEvaluating && ((useAssistantId && assistantId.trim()) || (!useAssistantId && modelName.trim() && instructions.trim()))) {
                   e.currentTarget.style.transform = 'scale(1)';
                   e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 22%)';
                 }
               }}
-              title={!selectedDatasetId ? 'Select a dataset first' : !experimentName.trim() ? 'Enter an experiment name' : isEvaluating ? 'Creating evaluation job...' : 'Run Evaluation'}
+              title={!selectedDatasetId ? 'Select a dataset first' : !experimentName.trim() ? 'Enter an experiment name' : useAssistantId && !assistantId.trim() ? 'Enter assistant ID' : !useAssistantId && !modelName.trim() ? 'Enter model name' : !useAssistantId && !instructions.trim() ? 'Enter instructions' : isEvaluating ? 'Creating evaluation job...' : 'Run Evaluation'}
             >
               {isEvaluating ? (
                 <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -880,10 +880,10 @@ function UploadTab({
               </div>
             ) : (
               <>
-                {/* Model Name - Optional */}
+                {/* Model Name - Required */}
                 <div>
                   <label className="block text-sm font-medium mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>
-                    Model (Optional)
+                    Model <span style={{ color: 'hsl(8, 86%, 40%)' }}>*</span>
                   </label>
               <input
                 type="text"
@@ -893,17 +893,17 @@ function UploadTab({
                 disabled={isEvaluating}
                 className="w-full px-4 py-2 rounded-md border text-sm focus:outline-none focus:ring-2"
                 style={{
-                  borderColor: 'hsl(0, 0%, 85%)',
+                  borderColor: modelName ? 'hsl(167, 59%, 22%)' : 'hsl(0, 0%, 85%)',
                   backgroundColor: isEvaluating ? 'hsl(0, 0%, 97%)' : 'hsl(0, 0%, 100%)',
                   color: 'hsl(330, 3%, 19%)'
                 }}
               />
             </div>
 
-            {/* Instructions - Optional */}
+            {/* Instructions - Required */}
             <div>
               <label className="block text-sm font-medium mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>
-                Instructions (Optional)
+                Instructions <span style={{ color: 'hsl(8, 86%, 40%)' }}>*</span>
               </label>
               <textarea
                 value={instructions}
@@ -913,7 +913,7 @@ function UploadTab({
                 disabled={isEvaluating}
                 className="w-full px-4 py-2 rounded-md border text-sm focus:outline-none focus:ring-2"
                 style={{
-                  borderColor: 'hsl(0, 0%, 85%)',
+                  borderColor: instructions ? 'hsl(167, 59%, 22%)' : 'hsl(0, 0%, 85%)',
                   backgroundColor: isEvaluating ? 'hsl(0, 0%, 97%)' : 'hsl(0, 0%, 100%)',
                   color: 'hsl(330, 3%, 19%)'
                 }}
@@ -1011,6 +1011,23 @@ interface ScoreObject {
   cosine_similarity: CosineSimilarity;
 }
 
+interface AssistantConfig {
+  name: string;
+  model: string;
+  vector_store_ids: string[];
+  project_id: number;
+  organization_id: number;
+  updated_at: string;
+  deleted_at: string | null;
+  instructions: string;
+  assistant_id: string;
+  temperature: number;
+  max_num_results: number;
+  id: number;
+  inserted_at: string;
+  is_deleted: boolean;
+}
+
 interface EvalJob {
   id: number;
   run_name: string;
@@ -1029,6 +1046,7 @@ interface EvalJob {
     tools?: any[];
     include?: string[];
   };
+  assistant_id?: string;
   organization_id: number;
   project_id: number;
   inserted_at: string;
@@ -1045,9 +1063,10 @@ function ResultsTab({ apiKeys, selectedKeyId }: ResultsTabProps) {
   const [evalJobs, setEvalJobs] = useState<EvalJob[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [assistantConfigs, setAssistantConfigs] = useState<Map<string, AssistantConfig>>(new Map());
 
   // Fetch evaluation jobs
-  const fetchEvaluations = async () => {
+  const fetchEvaluations = useCallback(async () => {
     if (!selectedKeyId) {
       setError('Please select an API key first');
       return;
@@ -1086,14 +1105,54 @@ function ResultsTab({ apiKeys, selectedKeyId }: ResultsTabProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [apiKeys, selectedKeyId]);
+
+  // Fetch assistant config for a given assistant_id
+  const fetchAssistantConfig = useCallback(async (assistantId: string) => {
+    if (!selectedKeyId) return;
+
+    const selectedKey = apiKeys.find(k => k.id === selectedKeyId);
+    if (!selectedKey) return;
+
+    try {
+      const response = await fetch(`/api/assistant/${assistantId}`, {
+        method: 'GET',
+        headers: {
+          'X-API-KEY': selectedKey.key,
+        },
+      });
+
+      if (!response.ok) {
+        console.error(`Failed to fetch assistant config for ${assistantId}:`, response.status);
+        return;
+      }
+
+      const result = await response.json();
+      if (result.success && result.data) {
+        setAssistantConfigs(prev => new Map(prev).set(assistantId, result.data));
+      }
+    } catch (err: any) {
+      console.error(`Failed to fetch assistant config for ${assistantId}:`, err);
+    }
+  }, [apiKeys, selectedKeyId]);
+
+  // Fetch assistant configs for jobs with assistant_id
+  useEffect(() => {
+    const jobsWithAssistantId = evalJobs.filter(job => job.assistant_id);
+
+    jobsWithAssistantId.forEach(job => {
+      if (job.assistant_id && !assistantConfigs.has(job.assistant_id)) {
+        fetchAssistantConfig(job.assistant_id);
+      }
+    });
+  }, [evalJobs, assistantConfigs, fetchAssistantConfig]);
 
   // Fetch on mount and when API key changes
   useEffect(() => {
     if (selectedKeyId) {
       fetchEvaluations();
     }
-  }, [selectedKeyId]);
+  }, [selectedKeyId, fetchEvaluations]);
 
   // Auto-refresh every 10 seconds if there are processing jobs
   useEffect(() => {
@@ -1107,7 +1166,7 @@ function ResultsTab({ apiKeys, selectedKeyId }: ResultsTabProps) {
       }, 10000);
       return () => clearInterval(interval);
     }
-  }, [evalJobs, selectedKeyId]);
+  }, [evalJobs, fetchEvaluations]);
 
   return (
     <div className="space-y-6">
@@ -1157,7 +1216,11 @@ function ResultsTab({ apiKeys, selectedKeyId }: ResultsTabProps) {
       {evalJobs.length > 0 && (
         <div className="space-y-4">
           {evalJobs.map((job) => (
-            <EvalJobCard key={job.id} job={job} />
+            <EvalJobCard
+              key={job.id}
+              job={job}
+              assistantConfig={job.assistant_id ? assistantConfigs.get(job.assistant_id) : undefined}
+            />
           ))}
         </div>
       )}
@@ -1383,10 +1446,11 @@ function ScoreDisplay({ score, errorMessage }: ScoreDisplayProps) {
 // ============ RESULTS MODAL COMPONENT ============
 interface ResultsModalProps {
   job: EvalJob | null;
+  assistantConfig?: AssistantConfig;
   onClose: () => void;
 }
 
-function ResultsModal({ job, onClose }: ResultsModalProps) {
+function ResultsModal({ job, assistantConfig, onClose }: ResultsModalProps) {
   if (!job) return null;
 
   // Handle ESC key
@@ -1411,7 +1475,7 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
     let csvContent = 'data:text/csv;charset=utf-8,';
 
     // Header row
-    csvContent += 'Job ID,Run Name,Dataset,Model,Status,Total Items,';
+    csvContent += 'Job ID,Run Name,Dataset,Model,Assistant ID,Assistant Name,Temperature,Status,Total Items,';
     csvContent += 'Average Similarity,Standard Deviation,Total Pairs,';
     csvContent += 'Trace ID,Item Similarity Score\n';
 
@@ -1421,7 +1485,10 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
         job.id,
         `"${job.run_name}"`,
         `"${job.dataset_name}"`,
-        job.config?.model || 'N/A',
+        assistantConfig?.model || job.config?.model || 'N/A',
+        job.assistant_id || 'N/A',
+        assistantConfig?.name ? `"${assistantConfig.name}"` : 'N/A',
+        assistantConfig?.temperature !== undefined ? assistantConfig.temperature : 'N/A',
         job.status,
         job.total_items,
         cosine_similarity.avg.toFixed(2),
@@ -1502,6 +1569,18 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
               <p className="text-sm mt-1" style={{ color: 'hsl(330, 3%, 49%)' }}>
                 {job.run_name}
               </p>
+              {assistantConfig && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-xs px-2 py-1 rounded-md font-medium" style={{
+                    backgroundColor: 'hsl(167, 59%, 95%)',
+                    color: 'hsl(167, 59%, 22%)',
+                    borderWidth: '1px',
+                    borderColor: 'hsl(167, 59%, 70%)'
+                  }}>
+                    Assistant: {assistantConfig.name}
+                  </span>
+                </div>
+              )}
             </div>
             <button
               onClick={onClose}
@@ -1528,6 +1607,16 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
                 <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Summary</h3>
+                {assistantConfig && (
+                  <span className="text-xs px-2 py-1 rounded-md font-medium ml-auto" style={{
+                    backgroundColor: 'hsl(167, 59%, 95%)',
+                    color: 'hsl(167, 59%, 22%)',
+                    borderWidth: '1px',
+                    borderColor: 'hsl(167, 59%, 70%)'
+                  }}>
+                    Assistant: {assistantConfig.name}
+                  </span>
+                )}
               </div>
               <div className="border rounded-lg p-4" style={{ backgroundColor: 'hsl(0, 0%, 98%)', borderColor: 'hsl(0, 0%, 85%)' }}>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -1541,7 +1630,7 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
                   </div>
                   <div>
                     <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Model</div>
-                    <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.config?.model || 'N/A'}</div>
+                    <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{assistantConfig?.model || job.config?.model || 'N/A'}</div>
                   </div>
                   <div>
                     <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Status</div>
@@ -1565,6 +1654,12 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
                     <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Batch Job ID</div>
                     <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.batch_job_id}</div>
                   </div>
+                  {job.assistant_id && (
+                    <div>
+                      <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Assistant ID</div>
+                      <div className="text-sm font-medium font-mono" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.assistant_id}</div>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
                   <div>
@@ -1695,7 +1790,7 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
             )}
 
             {/* Configuration Section */}
-            {job.config && (job.config.instructions || job.config.tools) && (
+            {(assistantConfig || (job.config && (job.config.instructions || job.config.tools))) && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'hsl(330, 3%, 49%)' }}>
@@ -1705,32 +1800,58 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
                   <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Configuration</h3>
                 </div>
                 <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: 'hsl(0, 0%, 98%)', borderColor: 'hsl(0, 0%, 85%)' }}>
-                  {job.config.instructions && (
-                    <div>
-                      <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Instructions</div>
-                      <div className="text-sm" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.config.instructions}</div>
-                    </div>
-                  )}
-                  {job.config.tools && job.config.tools.length > 0 && (
-                    <div>
-                      <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Tools</div>
-                      <div className="flex flex-wrap gap-2">
-                        {job.config.tools.map((tool, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2 py-1 rounded text-xs font-medium"
-                            style={{
-                              backgroundColor: 'hsl(167, 59%, 95%)',
-                              borderWidth: '1px',
-                              borderColor: 'hsl(167, 59%, 70%)',
-                              color: 'hsl(167, 59%, 22%)'
-                            }}
-                          >
-                            {tool.type}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                  {assistantConfig ? (
+                    <>
+                      {assistantConfig.instructions && (
+                        <div>
+                          <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Instructions</div>
+                          <div className="text-sm p-3 rounded-md font-mono whitespace-pre-wrap" style={{
+                            backgroundColor: 'hsl(0, 0%, 100%)',
+                            color: 'hsl(330, 3%, 19%)',
+                            maxHeight: '200px',
+                            overflowY: 'auto'
+                          }}>
+                            {assistantConfig.instructions}
+                          </div>
+                        </div>
+                      )}
+                      {assistantConfig.temperature !== undefined && (
+                        <div>
+                          <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Temperature</div>
+                          <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{assistantConfig.temperature}</div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {job.config.instructions && (
+                        <div>
+                          <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Instructions</div>
+                          <div className="text-sm" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.config.instructions}</div>
+                        </div>
+                      )}
+                      {job.config.tools && job.config.tools.length > 0 && (
+                        <div>
+                          <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Tools</div>
+                          <div className="flex flex-wrap gap-2">
+                            {job.config.tools.map((tool, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-1 rounded text-xs font-medium"
+                                style={{
+                                  backgroundColor: 'hsl(167, 59%, 95%)',
+                                  borderWidth: '1px',
+                                  borderColor: 'hsl(167, 59%, 70%)',
+                                  color: 'hsl(167, 59%, 22%)'
+                                }}
+                              >
+                                {tool.type}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -1781,9 +1902,10 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
 // ============ EVAL JOB CARD COMPONENT ============
 interface EvalJobCardProps {
   job: EvalJob;
+  assistantConfig?: AssistantConfig;
 }
 
-function EvalJobCard({ job }: EvalJobCardProps) {
+function EvalJobCard({ job, assistantConfig }: EvalJobCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -1891,13 +2013,46 @@ function EvalJobCard({ job }: EvalJobCardProps) {
             <div>
               <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Model</div>
               <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>
-                {job.config?.model || 'N/A'}
+                {assistantConfig?.model || job.config?.model || 'N/A'}
               </div>
             </div>
+            {job.assistant_id && (
+              <div>
+                <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Assistant ID</div>
+                <div className="text-sm font-medium font-mono" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                  {job.assistant_id}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Config Details (if available) */}
-          {job.config && (job.config.instructions || job.config.tools) && (
+          {/* Assistant Config Details (if available) */}
+          {assistantConfig && (
+            <div className="border-t pt-4 mb-4" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
+              <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Assistant Configuration</div>
+              <div className="text-sm mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                <span className="font-medium">Name:</span> {assistantConfig.name}
+              </div>
+              {assistantConfig.instructions && (
+                <div className="text-sm mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                  <span className="font-medium">Instructions:</span> {assistantConfig.instructions.substring(0, 100)}{assistantConfig.instructions.length > 100 ? '...' : ''}
+                </div>
+              )}
+              {assistantConfig.temperature !== undefined && (
+                <div className="text-sm mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                  <span className="font-medium">Temperature:</span> {assistantConfig.temperature}
+                </div>
+              )}
+              {assistantConfig.vector_store_ids && assistantConfig.vector_store_ids.length > 0 && (
+                <div className="text-sm" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                  <span className="font-medium">Vector Stores:</span> {assistantConfig.vector_store_ids.length} attached
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Regular Config Details (if available and no assistant config) */}
+          {!assistantConfig && job.config && (job.config.instructions || job.config.tools) && (
             <div className="border-t pt-4 mb-4" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
               <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Configuration</div>
               {job.config.instructions && (
@@ -1953,7 +2108,7 @@ function EvalJobCard({ job }: EvalJobCardProps) {
 
       {/* Results Modal */}
       {isModalOpen && (
-        <ResultsModal job={job} onClose={() => setIsModalOpen(false)} />
+        <ResultsModal job={job} assistantConfig={assistantConfig} onClose={() => setIsModalOpen(false)} />
       )}
     </div>
   );

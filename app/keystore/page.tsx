@@ -49,7 +49,7 @@ export default function KaapiKeystore() {
     }
   }, [apiKeys]);
 
-  const providers = ['Kaapi','OpenAI', 'Anthropic', 'Google', 'Cohere', 'Other'];
+  const providers = ['Kaapi'];
 
   const handleAddKey = () => {
     if (!newKeyLabel.trim() || !newKeyValue.trim()) {
