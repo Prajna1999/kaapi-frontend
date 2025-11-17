@@ -39,6 +39,8 @@ export default function SimplifiedEval() {
   const [instructions, setInstructions] = useState<string>('You are a helpful FAQ assistant.');
   const [vectorStoreIds, setVectorStoreIds] = useState<string>('');
   const [maxNumResults, setMaxNumResults] = useState<string>('3');
+  const [assistantId, setAssistantId] = useState<string>('');
+  const [useAssistantId, setUseAssistantId] = useState<boolean>(false);
 
   const router = useRouter();
 
@@ -211,31 +213,37 @@ export default function SimplifiedEval() {
         experiment_name: experimentName.trim(),
       };
 
-      // Add optional config if fields are provided
-      const hasConfig = modelName || instructions || vectorStoreIds;
-      if (hasConfig) {
+      // Add assistant_id if using assistant_id mode
+      if (useAssistantId && assistantId) {
+        payload.assistant_id = assistantId.trim();
         payload.config = {};
+      } else {
+        // Add optional config if fields are provided
+        const hasConfig = modelName || instructions || vectorStoreIds;
+        if (hasConfig) {
+          payload.config = {};
 
-        if (modelName) {
-          payload.config.model = modelName;
-        }
+          if (modelName) {
+            payload.config.model = modelName;
+          }
 
-        if (instructions) {
-          payload.config.instructions = instructions;
-        }
+          if (instructions) {
+            payload.config.instructions = instructions;
+          }
 
-        // Add tools if vector store IDs are provided
-        if (vectorStoreIds) {
-          const vectorStoreIdArray = vectorStoreIds.split(',').map(id => id.trim()).filter(id => id);
-          if (vectorStoreIdArray.length > 0) {
-            payload.config.tools = [
-              {
-                type: 'file_search',
-                vector_store_ids: vectorStoreIdArray,
-                max_num_results: parseInt(maxNumResults) || 3,
-              }
-            ];
-            payload.config.include = ['file_search_call.results'];
+          // Add tools if vector store IDs are provided
+          if (vectorStoreIds) {
+            const vectorStoreIdArray = vectorStoreIds.split(',').map(id => id.trim()).filter(id => id);
+            if (vectorStoreIdArray.length > 0) {
+              payload.config.tools = [
+                {
+                  type: 'file_search',
+                  vector_store_ids: vectorStoreIdArray,
+                  // max_num_results: parseInt(maxNumResults) || 3,
+                }
+              ];
+              payload.config.include = ['file_search_call.results'];
+            }
           }
         }
       }
@@ -425,6 +433,8 @@ export default function SimplifiedEval() {
                   instructions={instructions}
                   vectorStoreIds={vectorStoreIds}
                   maxNumResults={maxNumResults}
+                  assistantId={assistantId}
+                  useAssistantId={useAssistantId}
                   onKeySelect={setSelectedKeyId}
                   onStoredDatasetSelect={handleStoredDatasetSelect}
                   onOpenUploadModal={() => setIsUploadModalOpen(true)}
@@ -433,6 +443,8 @@ export default function SimplifiedEval() {
                   onInstructionsChange={setInstructions}
                   onVectorStoreIdsChange={setVectorStoreIds}
                   onMaxNumResultsChange={setMaxNumResults}
+                  onAssistantIdChange={setAssistantId}
+                  onUseAssistantIdChange={setUseAssistantId}
                   onRunEvaluation={handleRunEvaluation}
                 />
               ) : (
@@ -478,6 +490,8 @@ interface UploadTabProps {
   instructions: string;
   vectorStoreIds: string;
   maxNumResults: string;
+  assistantId: string;
+  useAssistantId: boolean;
   onKeySelect: (keyId: string) => void;
   onStoredDatasetSelect: (datasetId: string) => void;
   onOpenUploadModal: () => void;
@@ -486,6 +500,8 @@ interface UploadTabProps {
   onInstructionsChange: (value: string) => void;
   onVectorStoreIdsChange: (value: string) => void;
   onMaxNumResultsChange: (value: string) => void;
+  onAssistantIdChange: (value: string) => void;
+  onUseAssistantIdChange: (value: boolean) => void;
   onRunEvaluation: () => void;
 }
 
@@ -500,6 +516,8 @@ function UploadTab({
   instructions,
   vectorStoreIds,
   maxNumResults,
+  assistantId,
+  useAssistantId,
   onKeySelect,
   onStoredDatasetSelect,
   onOpenUploadModal,
@@ -508,6 +526,8 @@ function UploadTab({
   onInstructionsChange,
   onVectorStoreIdsChange,
   onMaxNumResultsChange,
+  onAssistantIdChange,
+  onUseAssistantIdChange,
   onRunEvaluation,
 }: UploadTabProps) {
   const selectedKey = apiKeys.find(k => k.id === selectedKeyId);
@@ -547,7 +567,7 @@ function UploadTab({
                 <h3 className="text-sm font-semibold mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>How it works</h3>
                 <ol className="list-decimal list-inside space-y-1.5 text-xs" style={{ color: 'hsl(330, 3%, 49%)' }}>
                   <li>Select an API key from your keystore</li>
-                  <li>Select a stored dataset or upload a new CSV file (format: question, expected_answer columns)</li>
+                  <li>Select a stored dataset or upload a new CSV file (format: question,answer columns)</li>
                   <li>Configure evaluation settings (experiment name required, other fields optional)</li>
                   <li>Click "Run Evaluation" to start the evaluation process</li>
                   <li>Wait for processing to complete (automatic redirect to results)</li>
@@ -646,7 +666,7 @@ function UploadTab({
               >
                 <h3 className="text-sm font-semibold mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>Expected CSV Format</h3>
                 <pre className="text-xs p-3 rounded-md border overflow-x-auto font-mono" style={{ backgroundColor: 'hsl(0, 0%, 96.5%)', borderColor: 'hsl(0, 0%, 85%)', color: 'hsl(330, 3%, 19%)' }}>
-{`question,expected_answer
+{`question,answer
 "What is X?","Answer Y"
 "Explain Z","Description of Z"`}
                 </pre>
@@ -800,11 +820,71 @@ function UploadTab({
               />
             </div>
 
-            {/* Model Name - Optional */}
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>
-                Model (Optional)
+            {/* Configuration Mode Toggle */}
+            <div className="border-t border-b py-4" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
+              <label className="block text-sm font-semibold mb-3" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                Configuration Mode
               </label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={!useAssistantId}
+                    onChange={() => onUseAssistantIdChange(false)}
+                    disabled={isEvaluating}
+                    className="w-4 h-4"
+                    style={{ accentColor: 'hsl(167, 59%, 22%)' }}
+                  />
+                  <span className="text-sm" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                    Use Config (Model, Instructions, Tools)
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={useAssistantId}
+                    onChange={() => onUseAssistantIdChange(true)}
+                    disabled={isEvaluating}
+                    className="w-4 h-4"
+                    style={{ accentColor: 'hsl(167, 59%, 22%)' }}
+                  />
+                  <span className="text-sm" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                    Use Assistant ID
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Assistant ID Field - Shown when useAssistantId is true */}
+            {useAssistantId ? (
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                  Assistant ID <span style={{ color: 'hsl(8, 86%, 40%)' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={assistantId}
+                  onChange={(e) => onAssistantIdChange(e.target.value)}
+                  placeholder="e.g., asst_xyz"
+                  disabled={isEvaluating}
+                  className="w-full px-4 py-2 rounded-md border text-sm focus:outline-none focus:ring-2"
+                  style={{
+                    borderColor: assistantId ? 'hsl(167, 59%, 22%)' : 'hsl(0, 0%, 85%)',
+                    backgroundColor: isEvaluating ? 'hsl(0, 0%, 97%)' : 'hsl(0, 0%, 100%)',
+                    color: 'hsl(330, 3%, 19%)'
+                  }}
+                />
+                <p className="text-xs mt-1" style={{ color: 'hsl(330, 3%, 49%)' }}>
+                  Configuration will be fetched from the assistant in the database
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Model Name - Optional */}
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                    Model (Optional)
+                  </label>
               <input
                 type="text"
                 value={modelName}
@@ -868,7 +948,7 @@ function UploadTab({
                     Comma-separated list of vector store IDs for file search
                   </p>
                 </div>
-
+{/* 
                 <div>
                   <label className="block text-sm font-medium mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>
                     Max Number of Results
@@ -888,9 +968,11 @@ function UploadTab({
                       color: 'hsl(330, 3%, 19%)'
                     }}
                   />
-                </div>
+                </div> */}
               </div>
             </div>
+              </>
+            )}
           </div>
 
           {/* Status Messages */}
@@ -1134,8 +1216,8 @@ function ScoreDisplay({ score, errorMessage }: ScoreDisplayProps) {
   }
 
   const { cosine_similarity } = score;
-  const avgPercent = (cosine_similarity.avg * 100).toFixed(1);
-  const stdPercent = (cosine_similarity.std * 100).toFixed(1);
+  const avgScore = cosine_similarity.avg.toFixed(2);
+  const stdScore = cosine_similarity.std.toFixed(2);
 
   const getScoreColor = (similarity: number) => {
     if (similarity >= 0.7) {
@@ -1166,9 +1248,9 @@ function ScoreDisplay({ score, errorMessage }: ScoreDisplayProps) {
         }}
       >
         <span className="font-medium">Similarity Score:</span>
-        <span className="font-semibold">{avgPercent}%</span>
+        <span className="font-semibold">{avgScore}</span>
         <span className="text-xs" style={{ color: 'hsl(330, 3%, 49%)' }}>
-          ±{stdPercent}%
+          ±{stdScore}
         </span>
         <span className="text-xs" style={{ color: 'hsl(330, 3%, 49%)' }}>
           ({cosine_similarity.total_pairs} pairs)
@@ -1207,7 +1289,7 @@ function ScoreDisplay({ score, errorMessage }: ScoreDisplayProps) {
               Per-Item Similarity Scores
             </h4>
             <p className="text-xs mt-1" style={{ color: 'hsl(330, 3%, 49%)' }}>
-              Average: {avgPercent}% • Std Dev: {stdPercent}% • Total: {cosine_similarity.total_pairs} items
+              Average: {avgScore} • Std Dev: {stdScore} • Total: {cosine_similarity.total_pairs} items
             </p>
           </div>
 
@@ -1219,7 +1301,7 @@ function ScoreDisplay({ score, errorMessage }: ScoreDisplayProps) {
             }}
           >
             {cosine_similarity.per_item_scores.map((item, index) => {
-              const itemPercent = (item.cosine_similarity * 100).toFixed(1);
+              const itemScore = item.cosine_similarity.toFixed(2);
               const itemColors = getScoreColor(item.cosine_similarity);
 
               return (
@@ -1264,7 +1346,7 @@ function ScoreDisplay({ score, errorMessage }: ScoreDisplayProps) {
                         color: itemColors.text
                       }}
                     >
-                      {itemPercent}%
+                      {itemScore}
                     </div>
                   </div>
 
@@ -1342,11 +1424,11 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
         job.config?.model || 'N/A',
         job.status,
         job.total_items,
-        (cosine_similarity.avg * 100).toFixed(2),
-        (cosine_similarity.std * 100).toFixed(2),
+        cosine_similarity.avg.toFixed(2),
+        cosine_similarity.std.toFixed(2),
         cosine_similarity.total_pairs,
         item.trace_id,
-        (item.cosine_similarity * 100).toFixed(2)
+        item.cosine_similarity.toFixed(2)
       ].join(',');
 
       csvContent += row + '\n';
@@ -1393,8 +1475,8 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
   const formatDate = (dateString: string) => new Date(dateString).toLocaleString();
 
   const hasScore = job.score && job.score.cosine_similarity;
-  const avgPercent = hasScore ? (job.score.cosine_similarity.avg * 100).toFixed(1) : 'N/A';
-  const stdPercent = hasScore ? (job.score.cosine_similarity.std * 100).toFixed(1) : 'N/A';
+  const avgScore = hasScore ? job.score.cosine_similarity.avg.toFixed(2) : 'N/A';
+  const stdScore = hasScore ? job.score.cosine_similarity.std.toFixed(2) : 'N/A';
   const totalPairs = hasScore ? job.score.cosine_similarity.total_pairs : 0;
 
   return (
@@ -1510,11 +1592,11 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="text-center">
                       <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Average Similarity</div>
-                      <div className="text-3xl font-bold" style={{ color: 'hsl(167, 59%, 22%)' }}>{avgPercent}%</div>
+                      <div className="text-3xl font-bold" style={{ color: 'hsl(167, 59%, 22%)' }}>{avgScore}</div>
                     </div>
                     <div className="text-center">
                       <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Standard Deviation</div>
-                      <div className="text-3xl font-bold" style={{ color: 'hsl(330, 3%, 49%)' }}>±{stdPercent}%</div>
+                      <div className="text-3xl font-bold" style={{ color: 'hsl(330, 3%, 49%)' }}>±{stdScore}</div>
                     </div>
                     <div className="text-center">
                       <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Total Pairs</div>
@@ -1551,7 +1633,7 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
                 <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
                   <div className="overflow-y-auto" style={{ maxHeight: '400px' }}>
                     {job.score.cosine_similarity.per_item_scores.map((item, index) => {
-                      const itemPercent = (item.cosine_similarity * 100).toFixed(1);
+                      const itemScore = item.cosine_similarity.toFixed(2);
                       const itemColors = getScoreColor(item.cosine_similarity);
 
                       return (
@@ -1589,7 +1671,7 @@ function ResultsModal({ job, onClose }: ResultsModalProps) {
                                 color: itemColors.text
                               }}
                             >
-                              {itemPercent}%
+                              {itemScore}
                             </div>
                           </div>
                           <div
