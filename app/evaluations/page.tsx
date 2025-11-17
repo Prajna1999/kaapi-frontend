@@ -913,6 +913,22 @@ function UploadTab({
 }
 
 // ============ TYPES ============
+interface PerItemScore {
+  trace_id: string;
+  cosine_similarity: number;
+}
+
+interface CosineSimilarity {
+  avg: number;
+  std: number;
+  total_pairs: number;
+  per_item_scores: PerItemScore[];
+}
+
+interface ScoreObject {
+  cosine_similarity: CosineSimilarity;
+}
+
 interface EvalJob {
   id: number;
   run_name: string;
@@ -923,7 +939,7 @@ interface EvalJob {
   status: string;
   object_store_url: string | null;
   total_items: number;
-  score: number | null;
+  score: ScoreObject | null;
   error_message: string | null;
   config: {
     model?: string;
@@ -1067,6 +1083,619 @@ function ResultsTab({ apiKeys, selectedKeyId }: ResultsTabProps) {
   );
 }
 
+// ============ SCORE DISPLAY COMPONENT ============
+interface ScoreDisplayProps {
+  score: ScoreObject | null;
+  errorMessage: string | null;
+}
+
+function ScoreDisplay({ score, errorMessage }: ScoreDisplayProps) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const leaveTimeoutRef = useState<NodeJS.Timeout | null>(null)[0];
+
+  const handleMouseEnter = () => {
+    if (leaveTimeoutRef) {
+      clearTimeout(leaveTimeoutRef);
+    }
+    setIsLeaving(false);
+    setIsHovered(true);
+  };
+
+  const handleMouseLeave = () => {
+    setIsLeaving(true);
+    const timeout = setTimeout(() => {
+      setIsHovered(false);
+      setIsLeaving(false);
+    }, 200);
+  };
+
+  // No score available
+  if (!score) {
+    return (
+      <div
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm"
+        style={{
+          backgroundColor: 'hsl(0, 0%, 95%)',
+          borderWidth: '1px',
+          borderColor: 'hsl(0, 0%, 85%)',
+          color: 'hsl(330, 3%, 49%)'
+        }}
+      >
+        <span className="font-medium">Similarity Score:</span>
+        <span>N/A</span>
+        {errorMessage && (
+          <span className="text-xs" style={{ color: 'hsl(8, 86%, 40%)' }}>
+            (Error)
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  const { cosine_similarity } = score;
+  const avgPercent = (cosine_similarity.avg * 100).toFixed(1);
+  const stdPercent = (cosine_similarity.std * 100).toFixed(1);
+
+  const getScoreColor = (similarity: number) => {
+    if (similarity >= 0.7) {
+      return { bg: 'hsl(134, 61%, 95%)', border: 'hsl(134, 61%, 70%)', text: 'hsl(134, 61%, 25%)' };
+    } else if (similarity >= 0.5) {
+      return { bg: 'hsl(46, 100%, 95%)', border: 'hsl(46, 100%, 80%)', text: 'hsl(46, 100%, 25%)' };
+    } else {
+      return { bg: 'hsl(8, 86%, 95%)', border: 'hsl(8, 86%, 80%)', text: 'hsl(8, 86%, 40%)' };
+    }
+  };
+
+  const avgColors = getScoreColor(cosine_similarity.avg);
+
+  return (
+    <div
+      className="relative inline-block"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Collapsed View - Always Visible */}
+      <div
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm cursor-pointer transition-all duration-200"
+        style={{
+          backgroundColor: isHovered ? avgColors.bg : 'hsl(0, 0%, 98%)',
+          borderWidth: '1px',
+          borderColor: isHovered ? avgColors.border : 'hsl(0, 0%, 85%)',
+          color: avgColors.text
+        }}
+      >
+        <span className="font-medium">Similarity Score:</span>
+        <span className="font-semibold">{avgPercent}%</span>
+        <span className="text-xs" style={{ color: 'hsl(330, 3%, 49%)' }}>
+          ±{stdPercent}%
+        </span>
+        <span className="text-xs" style={{ color: 'hsl(330, 3%, 49%)' }}>
+          ({cosine_similarity.total_pairs} pairs)
+        </span>
+        {/* Dropdown indicator */}
+        <svg
+          className="w-3 h-3 transition-transform duration-200"
+          style={{
+            color: 'hsl(330, 3%, 49%)',
+            transform: isHovered ? 'rotate(180deg)' : 'rotate(0deg)'
+          }}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+
+      {/* Expanded View - Shown on Hover */}
+      {isHovered && (
+        <div
+          className="absolute left-0 top-full mt-2 border rounded-lg shadow-lg z-50 animate-fadeIn"
+          style={{
+            backgroundColor: 'hsl(0, 0%, 100%)',
+            borderColor: 'hsl(0, 0%, 85%)',
+            minWidth: '400px',
+            maxWidth: '500px',
+            opacity: isLeaving ? 0.5 : 1,
+            transition: 'opacity 200ms ease-in-out'
+          }}
+        >
+          {/* Header */}
+          <div className="px-4 py-3 border-b" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
+            <h4 className="text-sm font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>
+              Per-Item Similarity Scores
+            </h4>
+            <p className="text-xs mt-1" style={{ color: 'hsl(330, 3%, 49%)' }}>
+              Average: {avgPercent}% • Std Dev: {stdPercent}% • Total: {cosine_similarity.total_pairs} items
+            </p>
+          </div>
+
+          {/* Scrollable List */}
+          <div
+            className="overflow-y-auto"
+            style={{
+              maxHeight: '300px'
+            }}
+          >
+            {cosine_similarity.per_item_scores.map((item, index) => {
+              const itemPercent = (item.cosine_similarity * 100).toFixed(1);
+              const itemColors = getScoreColor(item.cosine_similarity);
+
+              return (
+                <div
+                  key={item.trace_id}
+                  className="px-4 py-2.5 border-b transition-colors"
+                  style={{
+                    borderColor: 'hsl(0, 0%, 92%)',
+                    backgroundColor: 'transparent'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 98%)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    {/* Trace ID */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium" style={{ color: 'hsl(330, 3%, 49%)' }}>
+                          Trace ID #{index + 1}:
+                        </span>
+                        <code
+                          className="text-xs font-mono truncate"
+                          style={{ color: 'hsl(330, 3%, 19%)' }}
+                          title={item.trace_id}
+                        >
+                          {item.trace_id}
+                        </code>
+                      </div>
+                    </div>
+
+                    {/* Score Badge */}
+                    <div
+                      className="px-2.5 py-1 rounded text-xs font-semibold whitespace-nowrap"
+                      style={{
+                        backgroundColor: itemColors.bg,
+                        borderWidth: '1px',
+                        borderColor: itemColors.border,
+                        color: itemColors.text
+                      }}
+                    >
+                      {itemPercent}%
+                    </div>
+                  </div>
+
+                  {/* Visual Bar */}
+                  <div
+                    className="mt-1.5 h-1.5 rounded-full overflow-hidden"
+                    style={{ backgroundColor: 'hsl(0, 0%, 92%)' }}
+                  >
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: `${item.cosine_similarity * 100}%`,
+                        backgroundColor: itemColors.text
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <div className="px-4 py-2 border-t text-center" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
+            <p className="text-xs" style={{ color: 'hsl(330, 3%, 49%)' }}>
+              Hover to keep open • Move away to close
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ RESULTS MODAL COMPONENT ============
+interface ResultsModalProps {
+  job: EvalJob | null;
+  onClose: () => void;
+}
+
+function ResultsModal({ job, onClose }: ResultsModalProps) {
+  if (!job) return null;
+
+  // Handle ESC key
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
+
+  // Export to CSV
+  const handleExportCSV = () => {
+    if (!job.score || !job.score.cosine_similarity) {
+      alert('No data available to export');
+      return;
+    }
+
+    const { cosine_similarity } = job.score;
+
+    // Build CSV content
+    let csvContent = 'data:text/csv;charset=utf-8,';
+
+    // Header row
+    csvContent += 'Job ID,Run Name,Dataset,Model,Status,Total Items,';
+    csvContent += 'Average Similarity,Standard Deviation,Total Pairs,';
+    csvContent += 'Trace ID,Item Similarity Score\n';
+
+    // Data rows - one row per item
+    cosine_similarity.per_item_scores.forEach((item, index) => {
+      const row = [
+        job.id,
+        `"${job.run_name}"`,
+        `"${job.dataset_name}"`,
+        job.config?.model || 'N/A',
+        job.status,
+        job.total_items,
+        (cosine_similarity.avg * 100).toFixed(2),
+        (cosine_similarity.std * 100).toFixed(2),
+        cosine_similarity.total_pairs,
+        item.trace_id,
+        (item.cosine_similarity * 100).toFixed(2)
+      ].join(',');
+
+      csvContent += row + '\n';
+    });
+
+    // Create download link
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `evaluation_${job.id}_${job.run_name.replace(/[^a-z0-9]/gi, '_')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'completed':
+      case 'success':
+        return { bg: 'hsl(134, 61%, 95%)', border: 'hsl(134, 61%, 70%)', text: 'hsl(134, 61%, 25%)' };
+      case 'processing':
+      case 'pending':
+      case 'queued':
+        return { bg: 'hsl(46, 100%, 95%)', border: 'hsl(46, 100%, 80%)', text: 'hsl(46, 100%, 25%)' };
+      case 'failed':
+      case 'error':
+        return { bg: 'hsl(8, 86%, 95%)', border: 'hsl(8, 86%, 80%)', text: 'hsl(8, 86%, 40%)' };
+      default:
+        return { bg: 'hsl(0, 0%, 100%)', border: 'hsl(0, 0%, 85%)', text: 'hsl(330, 3%, 49%)' };
+    }
+  };
+
+  const getScoreColor = (similarity: number) => {
+    if (similarity >= 0.7) {
+      return { bg: 'hsl(134, 61%, 95%)', border: 'hsl(134, 61%, 70%)', text: 'hsl(134, 61%, 25%)' };
+    } else if (similarity >= 0.5) {
+      return { bg: 'hsl(46, 100%, 95%)', border: 'hsl(46, 100%, 80%)', text: 'hsl(46, 100%, 25%)' };
+    } else {
+      return { bg: 'hsl(8, 86%, 95%)', border: 'hsl(8, 86%, 80%)', text: 'hsl(8, 86%, 40%)' };
+    }
+  };
+
+  const statusColors = getStatusColor(job.status);
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleString();
+
+  const hasScore = job.score && job.score.cosine_similarity;
+  const avgPercent = hasScore ? (job.score.cosine_similarity.avg * 100).toFixed(1) : 'N/A';
+  const stdPercent = hasScore ? (job.score.cosine_similarity.std * 100).toFixed(1) : 'N/A';
+  const totalPairs = hasScore ? job.score.cosine_similarity.total_pairs : 0;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-modalBackdrop"
+        style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}
+        onClick={onClose}
+      >
+        {/* Modal Content */}
+        <div
+          className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-lg shadow-2xl animate-modalContent"
+          style={{ backgroundColor: 'hsl(0, 0%, 100%)' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
+            <div>
+              <h2 className="text-2xl font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                Evaluation Report
+              </h2>
+              <p className="text-sm mt-1" style={{ color: 'hsl(330, 3%, 49%)' }}>
+                {job.run_name}
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-md transition-colors"
+              style={{
+                color: 'hsl(330, 3%, 49%)',
+                backgroundColor: 'transparent'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 95%)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Scrollable Content */}
+          <div className="overflow-y-auto p-6 space-y-6" style={{ maxHeight: 'calc(90vh - 200px)' }}>
+            {/* Summary Section */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'hsl(330, 3%, 49%)' }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Summary</h3>
+              </div>
+              <div className="border rounded-lg p-4" style={{ backgroundColor: 'hsl(0, 0%, 98%)', borderColor: 'hsl(0, 0%, 85%)' }}>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Job ID</div>
+                    <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.id}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Dataset</div>
+                    <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.dataset_name}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Model</div>
+                    <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.config?.model || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Status</div>
+                    <div
+                      className="inline-block px-2 py-1 rounded text-xs font-semibold"
+                      style={{
+                        backgroundColor: statusColors.bg,
+                        borderWidth: '1px',
+                        borderColor: statusColors.border,
+                        color: statusColors.text
+                      }}
+                    >
+                      {job.status.toUpperCase()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Total Items</div>
+                    <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.total_items}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Batch Job ID</div>
+                    <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.batch_job_id}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
+                  <div>
+                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Created</div>
+                    <div className="text-sm" style={{ color: 'hsl(330, 3%, 19%)' }}>{formatDate(job.inserted_at)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Last Updated</div>
+                    <div className="text-sm" style={{ color: 'hsl(330, 3%, 19%)' }}>{formatDate(job.updated_at)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Metrics Section */}
+            {hasScore ? (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'hsl(330, 3%, 49%)' }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Metrics Overview</h3>
+                </div>
+                <div className="border rounded-lg p-4" style={{ backgroundColor: 'hsl(0, 0%, 98%)', borderColor: 'hsl(0, 0%, 85%)' }}>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Average Similarity</div>
+                      <div className="text-3xl font-bold" style={{ color: 'hsl(167, 59%, 22%)' }}>{avgPercent}%</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Standard Deviation</div>
+                      <div className="text-3xl font-bold" style={{ color: 'hsl(330, 3%, 49%)' }}>±{stdPercent}%</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Total Pairs</div>
+                      <div className="text-3xl font-bold" style={{ color: 'hsl(330, 3%, 19%)' }}>{totalPairs}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="border rounded-lg p-6 text-center" style={{ backgroundColor: 'hsl(8, 86%, 95%)', borderColor: 'hsl(8, 86%, 80%)' }}>
+                <p className="text-sm font-medium" style={{ color: 'hsl(8, 86%, 40%)' }}>
+                  {job.error_message ? 'Evaluation Failed' : 'No results available yet'}
+                </p>
+                {job.error_message && (
+                  <p className="text-xs mt-2" style={{ color: 'hsl(8, 86%, 40%)' }}>
+                    {job.error_message}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Detailed Results Section */}
+            {hasScore && job.score.cosine_similarity.per_item_scores.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'hsl(330, 3%, 49%)' }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                  <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Detailed Results</h3>
+                  <span className="text-sm" style={{ color: 'hsl(330, 3%, 49%)' }}>
+                    ({job.score.cosine_similarity.per_item_scores.length} items)
+                  </span>
+                </div>
+                <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
+                  <div className="overflow-y-auto" style={{ maxHeight: '400px' }}>
+                    {job.score.cosine_similarity.per_item_scores.map((item, index) => {
+                      const itemPercent = (item.cosine_similarity * 100).toFixed(1);
+                      const itemColors = getScoreColor(item.cosine_similarity);
+
+                      return (
+                        <div
+                          key={item.trace_id}
+                          className="px-4 py-3 border-b transition-colors"
+                          style={{
+                            borderColor: 'hsl(0, 0%, 92%)',
+                            backgroundColor: 'hsl(0, 0%, 100%)'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 98%)'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 100%)'}
+                        >
+                          <div className="flex items-center justify-between gap-4 mb-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold" style={{ color: 'hsl(330, 3%, 49%)' }}>
+                                  Trace ID #{index + 1}:
+                                </span>
+                                <code
+                                  className="text-xs font-mono truncate"
+                                  style={{ color: 'hsl(330, 3%, 19%)' }}
+                                  title={item.trace_id}
+                                >
+                                  {item.trace_id}
+                                </code>
+                              </div>
+                            </div>
+                            <div
+                              className="px-3 py-1 rounded text-sm font-semibold whitespace-nowrap"
+                              style={{
+                                backgroundColor: itemColors.bg,
+                                borderWidth: '1px',
+                                borderColor: itemColors.border,
+                                color: itemColors.text
+                              }}
+                            >
+                              {itemPercent}%
+                            </div>
+                          </div>
+                          <div
+                            className="h-2 rounded-full overflow-hidden"
+                            style={{ backgroundColor: 'hsl(0, 0%, 92%)' }}
+                          >
+                            <div
+                              className="h-full rounded-full transition-all duration-300"
+                              style={{
+                                width: `${item.cosine_similarity * 100}%`,
+                                backgroundColor: itemColors.text
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Configuration Section */}
+            {job.config && (job.config.instructions || job.config.tools) && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'hsl(330, 3%, 49%)' }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Configuration</h3>
+                </div>
+                <div className="border rounded-lg p-4 space-y-3" style={{ backgroundColor: 'hsl(0, 0%, 98%)', borderColor: 'hsl(0, 0%, 85%)' }}>
+                  {job.config.instructions && (
+                    <div>
+                      <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Instructions</div>
+                      <div className="text-sm" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.config.instructions}</div>
+                    </div>
+                  )}
+                  {job.config.tools && job.config.tools.length > 0 && (
+                    <div>
+                      <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Tools</div>
+                      <div className="flex flex-wrap gap-2">
+                        {job.config.tools.map((tool, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-1 rounded text-xs font-medium"
+                            style={{
+                              backgroundColor: 'hsl(167, 59%, 95%)',
+                              borderWidth: '1px',
+                              borderColor: 'hsl(167, 59%, 70%)',
+                              color: 'hsl(167, 59%, 22%)'
+                            }}
+                          >
+                            {tool.type}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t flex items-center justify-between" style={{ borderColor: 'hsl(0, 0%, 85%)', backgroundColor: 'hsl(0, 0%, 98%)' }}>
+            <button
+              onClick={handleExportCSV}
+              disabled={!hasScore}
+              className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+              style={{
+                borderWidth: '1px',
+                borderColor: hasScore ? 'hsl(167, 59%, 22%)' : 'hsl(0, 0%, 85%)',
+                backgroundColor: hasScore ? 'hsl(167, 59%, 95%)' : 'hsl(0, 0%, 95%)',
+                color: hasScore ? 'hsl(167, 59%, 22%)' : 'hsl(330, 3%, 49%)',
+                cursor: hasScore ? 'pointer' : 'not-allowed'
+              }}
+              onMouseEnter={(e) => {
+                if (hasScore) e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 90%)';
+              }}
+              onMouseLeave={(e) => {
+                if (hasScore) e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 95%)';
+              }}
+            >
+              Export CSV
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+              style={{
+                backgroundColor: 'hsl(167, 59%, 22%)',
+                color: 'hsl(0, 0%, 100%)'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 28%)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 22%)'}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ============ EVAL JOB CARD COMPONENT ============
 interface EvalJobCardProps {
   job: EvalJob;
@@ -1074,6 +1703,7 @@ interface EvalJobCardProps {
 
 function EvalJobCard({ job }: EvalJobCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -1139,16 +1769,12 @@ function EvalJobCard({ job }: EvalJobCardProps) {
                 ID: {job.id}
               </span>
             </div>
-            <div className="flex items-center gap-4 mt-1 text-sm" style={{ color: 'hsl(330, 3%, 49%)' }}>
+            <div className="flex items-center gap-4 mt-2 text-sm" style={{ color: 'hsl(330, 3%, 49%)' }}>
               <span>{job.dataset_name}</span>
               <span>•</span>
               <span>{job.total_items} items</span>
-              {job.score !== null && (
-                <>
-                  <span>•</span>
-                  <span className="font-medium">{(job.score * 100).toFixed(1)}% score</span>
-                </>
-              )}
+              <span>•</span>
+              <ScoreDisplay score={job.score} errorMessage={job.error_message} />
             </div>
           </div>
 
@@ -1171,10 +1797,10 @@ function EvalJobCard({ job }: EvalJobCardProps) {
       {isExpanded && (
         <div className="px-4 pb-4 border-t" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
           {/* Job Details Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4 mb-4">
             <div>
-              <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Dataset ID</div>
-              <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.dataset_id}</div>
+              <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Dataset</div>
+              <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.dataset_name}</div>
             </div>
             <div>
               <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Batch Job ID</div>
@@ -1185,10 +1811,6 @@ function EvalJobCard({ job }: EvalJobCardProps) {
               <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>
                 {job.config?.model || 'N/A'}
               </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Organization ID</div>
-              <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.organization_id}</div>
             </div>
           </div>
 
@@ -1230,23 +1852,26 @@ function EvalJobCard({ job }: EvalJobCardProps) {
           </div>
 
           {/* Actions */}
-          {job.object_store_url && (
-            <div className="border-t pt-4 mt-4" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
-              <a
-                href={job.object_store_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 rounded-md text-sm font-medium inline-block transition-colors"
-                style={{
-                  backgroundColor: 'hsl(167, 59%, 22%)',
-                  color: 'hsl(0, 0%, 100%)'
-                }}
-              >
-                View Results
-              </a>
-            </div>
-          )}
+          <div className="border-t pt-4 mt-4" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
+              style={{
+                backgroundColor: 'hsl(167, 59%, 22%)',
+                color: 'hsl(0, 0%, 100%)'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 28%)'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 22%)'}
+            >
+              View Results
+            </button>
+          </div>
         </div>
+      )}
+
+      {/* Results Modal */}
+      {isModalOpen && (
+        <ResultsModal job={job} onClose={() => setIsModalOpen(false)} />
       )}
     </div>
   );
