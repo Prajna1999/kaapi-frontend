@@ -37,6 +37,7 @@ export default function SimplifiedEval() {
   const [experimentName, setExperimentName] = useState<string>('');
   const [modelName, setModelName] = useState<string>('gpt-4');
   const [instructions, setInstructions] = useState<string>('You are a helpful FAQ assistant.');
+  // const [temperature, setTemperature] = useState<string>('0.000001'); // TODO: Implement temperature feature later
   const [vectorStoreIds, setVectorStoreIds] = useState<string>('');
   const [maxNumResults, setMaxNumResults] = useState<string>('3');
   const [assistantId, setAssistantId] = useState<string>('');
@@ -230,7 +231,11 @@ export default function SimplifiedEval() {
           if (instructions) {
             payload.config.instructions = instructions;
           }
-      
+
+          // TODO: Implement temperature feature later
+          // if (temperature) {
+          //   payload.config.temperature = parseFloat(temperature);
+          // }
 
           // Add tools if vector store IDs are provided
           if (vectorStoreIds) {
@@ -432,6 +437,7 @@ export default function SimplifiedEval() {
                   experimentName={experimentName}
                   modelName={modelName}
                   instructions={instructions}
+                  // temperature={temperature} // TODO: Implement temperature feature later
                   vectorStoreIds={vectorStoreIds}
                   maxNumResults={maxNumResults}
                   assistantId={assistantId}
@@ -442,6 +448,7 @@ export default function SimplifiedEval() {
                   onExperimentNameChange={setExperimentName}
                   onModelNameChange={setModelName}
                   onInstructionsChange={setInstructions}
+                  // onTemperatureChange={setTemperature} // TODO: Implement temperature feature later
                   onVectorStoreIdsChange={setVectorStoreIds}
                   onMaxNumResultsChange={setMaxNumResults}
                   onAssistantIdChange={setAssistantId}
@@ -489,6 +496,7 @@ interface UploadTabProps {
   experimentName: string;
   modelName: string;
   instructions: string;
+  // temperature: string; // TODO: Implement temperature feature later
   vectorStoreIds: string;
   maxNumResults: string;
   assistantId: string;
@@ -499,6 +507,7 @@ interface UploadTabProps {
   onExperimentNameChange: (value: string) => void;
   onModelNameChange: (value: string) => void;
   onInstructionsChange: (value: string) => void;
+  // onTemperatureChange: (value: string) => void; // TODO: Implement temperature feature later
   onVectorStoreIdsChange: (value: string) => void;
   onMaxNumResultsChange: (value: string) => void;
   onAssistantIdChange: (value: string) => void;
@@ -515,6 +524,7 @@ function UploadTab({
   experimentName,
   modelName,
   instructions,
+  // temperature, // TODO: Implement temperature feature later
   vectorStoreIds,
   maxNumResults,
   assistantId,
@@ -920,6 +930,30 @@ function UploadTab({
                 }}
               />
             </div>
+
+            {/* TODO: Implement temperature feature later */}
+            {/* Temperature */}
+            {/* <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'hsl(330, 3%, 19%)' }}>
+                Temperature
+              </label>
+              <input
+                type="number"
+                value={temperature}
+                onChange={(e) => onTemperatureChange(e.target.value)}
+                placeholder="0.000001"
+                step="0.000001"
+                min="0"
+                max="2"
+                disabled={isEvaluating}
+                className="w-full px-4 py-2 rounded-md border text-sm focus:outline-none focus:ring-2"
+                style={{
+                  borderColor: temperature ? 'hsl(167, 59%, 22%)' : 'hsl(0, 0%, 85%)',
+                  backgroundColor: isEvaluating ? 'hsl(0, 0%, 97%)' : 'hsl(0, 0%, 100%)',
+                  color: 'hsl(330, 3%, 19%)'
+                }}
+              />
+            </div> */}
 
             {/* Vector Store Configuration */}
             <div className="border-t pt-4" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
