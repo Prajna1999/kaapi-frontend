@@ -2059,7 +2059,7 @@ interface EvalJobCardProps {
 }
 
 function EvalJobCard({ job, assistantConfig }: EvalJobCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
 
