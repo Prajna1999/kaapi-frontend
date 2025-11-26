@@ -7,11 +7,19 @@
  */
 
 "use client"
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import {format, toZonedTime} from "date-fns-tz"
 import { useRouter } from 'next/navigation'
 import { APIKey } from '../keystore/page';
 import { STORAGE_KEY } from '../keystore/page';
 import { Dataset, DATASETS_STORAGE_KEY, UploadDatasetModal } from '../datasets/page';
+import { EvalJob, AssistantConfig, ScoreObject } from '../components/types';
+import { formatDate, getStatusColor, getScoreColor, calculateDynamicThresholds } from '../components/utils';
+import ConfigModal from '../components/ConfigModal';
+import StatusBadge from '../components/StatusBadge';
+import ScoreDisplay from '../components/ScoreDisplay';
+import Sidebar from '../components/Sidebar';
+import TabNavigation from '../components/TabNavigation';
 
 type Tab = 'upload' | 'results';
 
@@ -289,77 +297,7 @@ export default function SimplifiedEval() {
     <div className="w-full h-screen flex flex-col" style={{ backgroundColor: 'hsl(42, 63%, 94%)' }}>
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar - Full Height */}
-        <aside
-          className="border-r transition-all duration-300 ease-in-out h-full flex-shrink-0"
-          style={{
-            width: sidebarCollapsed ? '0px' : '240px',
-            backgroundColor: 'hsl(0, 0%, 100%)',
-            borderColor: 'hsl(0, 0%, 85%)',
-            overflow: 'hidden',
-          }}
-        >
-          <div className="px-6 py-4" style={{ backgroundColor: 'hsl(0, 0%, 100%)', borderColor: 'hsl(0, 0%, 85%)' }}>
-            <h2 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Kaapi Konsole</h2>
-            <p className="text-sm mt-1" style={{ color: 'hsl(330, 3%, 49%)' }}>A Tech4Dev Product</p>
-          </div>
-          <nav className="p-4 space-y-2 h-full" style={{ width: '240px' }}>
-            <button
-              onClick={() => router.push('/evaluations')}
-              className="w-full text-left px-4 py-3 rounded-md transition-all duration-200 text-sm font-medium flex items-center gap-3"
-              style={{
-                backgroundColor: 'hsl(167, 59%, 22%)',
-                color: 'hsl(0, 0%, 100%)'
-              }}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-              </svg>
-              Evaluations
-            </button>
-            <button
-              onClick={() => router.push('/datasets')}
-              className="w-full text-left px-4 py-3 rounded-md transition-all duration-200 text-sm font-medium flex items-center gap-3"
-              style={{
-                backgroundColor: 'transparent',
-                color: 'hsl(330, 3%, 49%)'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 96.5%)';
-                e.currentTarget.style.color = 'hsl(330, 3%, 19%)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = 'hsl(330, 3%, 49%)';
-              }}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-              Datasets
-            </button>
-            <button
-              onClick={() => router.push('/keystore')}
-              className="w-full text-left px-4 py-3 rounded-md transition-all duration-200 text-sm font-medium flex items-center gap-3"
-              style={{
-                backgroundColor: 'transparent',
-                color: 'hsl(330, 3%, 49%)'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 96.5%)';
-                e.currentTarget.style.color = 'hsl(330, 3%, 19%)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = 'hsl(330, 3%, 49%)';
-              }}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-              </svg>
-              Keystore
-            </button>
-          </nav>
-        </aside>
+        <Sidebar collapsed={sidebarCollapsed} activeRoute="/evaluations" />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -399,30 +337,14 @@ export default function SimplifiedEval() {
           </div>
 
           {/* Tab Navigation */}
-          <div className="border-b" style={{ backgroundColor: 'hsl(0, 0%, 100%)', borderColor: 'hsl(0, 0%, 85%)' }}>
-            <div className="flex px-6">
-              <button
-                onClick={() => setActiveTab('upload')}
-                className="px-6 py-3 text-sm font-medium border-b-2 transition-colors"
-                style={{
-                  borderBottomColor: activeTab === 'upload' ? 'hsl(167, 59%, 22%)' : 'transparent',
-                  color: activeTab === 'upload' ? 'hsl(167, 59%, 22%)' : 'hsl(330, 3%, 49%)'
-                }}
-              >
-                1. Upload & Run
-              </button>
-              <button
-                onClick={() => setActiveTab('results')}
-                className="px-6 py-3 text-sm font-medium border-b-2 transition-colors"
-                style={{
-                  borderBottomColor: activeTab === 'results' ? 'hsl(167, 59%, 22%)' : 'transparent',
-                  color: activeTab === 'results' ? 'hsl(167, 59%, 22%)' : 'hsl(330, 3%, 49%)'
-                }}
-              >
-                2. Results
-              </button>
-            </div>
-          </div>
+          <TabNavigation
+            tabs={[
+              { id: 'upload', label: '1. Upload & Run' },
+              { id: 'results', label: '2. Results' }
+            ]}
+            activeTab={activeTab}
+            onTabChange={(tabId) => setActiveTab(tabId as Tab)}
+          />
 
           {/* Tab Content */}
           <div className="flex-1 overflow-auto p-6" style={{ backgroundColor: 'hsl(42, 63%, 94%)' }}>
@@ -1030,64 +952,7 @@ function UploadTab({
 }
 
 // ============ TYPES ============
-interface PerItemScore {
-  trace_id: string;
-  cosine_similarity: number;
-}
-
-interface CosineSimilarity {
-  avg: number;
-  std: number;
-  total_pairs: number;
-  per_item_scores: PerItemScore[];
-}
-
-interface ScoreObject {
-  cosine_similarity: CosineSimilarity;
-}
-
-interface AssistantConfig {
-  name: string;
-  model: string;
-  vector_store_ids: string[];
-  project_id: number;
-  organization_id: number;
-  updated_at: string;
-  deleted_at: string | null;
-  instructions: string;
-  assistant_id: string;
-  temperature: number;
-  max_num_results: number;
-  id: number;
-  inserted_at: string;
-  is_deleted: boolean;
-}
-
-interface EvalJob {
-  id: number;
-  run_name: string;
-  dataset_name: string;
-  dataset_id: number;
-  batch_job_id: number;
-  embedding_batch_job_id: number | null;
-  status: string;
-  object_store_url: string | null;
-  total_items: number;
-  score: ScoreObject | null;
-  error_message: string | null;
-  config: {
-    model?: string;
-    instructions?: string;
-    tools?: any[];
-    include?: string[];
-    temperature?: number;
-  };
-  assistant_id?: string;
-  organization_id: number;
-  project_id: number;
-  inserted_at: string;
-  updated_at: string;
-}
+// Types are now imported from '../components/types'
 
 // ============ RESULTS TAB COMPONENT ============
 interface ResultsTabProps {
@@ -1265,219 +1130,7 @@ function ResultsTab({ apiKeys, selectedKeyId }: ResultsTabProps) {
 }
 
 // ============ SCORE DISPLAY COMPONENT ============
-interface ScoreDisplayProps {
-  score: ScoreObject | null;
-  errorMessage: string | null;
-}
-
-function ScoreDisplay({ score, errorMessage }: ScoreDisplayProps) {
-  const [isHovered, setIsHovered] = useState(false);
-  const [isLeaving, setIsLeaving] = useState(false);
-  const leaveTimeoutRef = useState<NodeJS.Timeout | null>(null)[0];
-
-  const handleMouseEnter = () => {
-    if (leaveTimeoutRef) {
-      clearTimeout(leaveTimeoutRef);
-    }
-    setIsLeaving(false);
-    setIsHovered(true);
-  };
-
-  const handleMouseLeave = () => {
-    setIsLeaving(true);
-    const timeout = setTimeout(() => {
-      setIsHovered(false);
-      setIsLeaving(false);
-    }, 200);
-  };
-
-  // No score available
-  if (!score) {
-    return (
-      <div
-        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm"
-        style={{
-          backgroundColor: 'hsl(0, 0%, 95%)',
-          borderWidth: '1px',
-          borderColor: 'hsl(0, 0%, 85%)',
-          color: 'hsl(330, 3%, 49%)'
-        }}
-      >
-        <span className="font-medium">Similarity Score:</span>
-        <span>N/A</span>
-        {errorMessage && (
-          <span className="text-xs" style={{ color: 'hsl(8, 86%, 40%)' }}>
-            (Error)
-          </span>
-        )}
-      </div>
-    );
-  }
-
-  const { cosine_similarity } = score;
-  const avgScore = cosine_similarity.avg.toFixed(2);
-  const stdScore = cosine_similarity.std.toFixed(2);
-
-  const getScoreColor = (similarity: number) => {
-    if (similarity >= 0.7) {
-      return { bg: 'hsl(134, 61%, 95%)', border: 'hsl(134, 61%, 70%)', text: 'hsl(134, 61%, 25%)' };
-    } else if (similarity >= 0.5) {
-      return { bg: 'hsl(46, 100%, 95%)', border: 'hsl(46, 100%, 80%)', text: 'hsl(46, 100%, 25%)' };
-    } else {
-      return { bg: 'hsl(8, 86%, 95%)', border: 'hsl(8, 86%, 80%)', text: 'hsl(8, 86%, 40%)' };
-    }
-  };
-
-  const avgColors = getScoreColor(cosine_similarity.avg);
-
-  return (
-    <div
-      className="relative inline-block"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {/* Collapsed View - Always Visible */}
-      <div
-        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm cursor-pointer transition-all duration-200"
-        style={{
-          backgroundColor: isHovered ? avgColors.bg : 'hsl(0, 0%, 98%)',
-          borderWidth: '1px',
-          borderColor: isHovered ? avgColors.border : 'hsl(0, 0%, 85%)',
-          color: avgColors.text
-        }}
-      >
-        <span className="font-medium">Similarity Score:</span>
-        <span className="font-semibold">{avgScore}</span>
-        <span className="text-xs" style={{ color: 'hsl(330, 3%, 49%)' }}>
-          ±{stdScore}
-        </span>
-        <span className="text-xs" style={{ color: 'hsl(330, 3%, 49%)' }}>
-          ({cosine_similarity.total_pairs} pairs)
-        </span>
-        {/* Dropdown indicator */}
-        <svg
-          className="w-3 h-3 transition-transform duration-200"
-          style={{
-            color: 'hsl(330, 3%, 49%)',
-            transform: isHovered ? 'rotate(180deg)' : 'rotate(0deg)'
-          }}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </div>
-
-      {/* Expanded View - Shown on Hover */}
-      {isHovered && (
-        <div
-          className="absolute left-0 top-full mt-2 border rounded-lg shadow-lg z-50 animate-fadeIn"
-          style={{
-            backgroundColor: 'hsl(0, 0%, 100%)',
-            borderColor: 'hsl(0, 0%, 85%)',
-            minWidth: '400px',
-            maxWidth: '500px',
-            opacity: isLeaving ? 0.5 : 1,
-            transition: 'opacity 200ms ease-in-out'
-          }}
-        >
-          {/* Header */}
-          <div className="px-4 py-3 border-b" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
-            <h4 className="text-sm font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>
-              Per-Item Similarity Scores
-            </h4>
-            <p className="text-xs mt-1" style={{ color: 'hsl(330, 3%, 49%)' }}>
-              Average: {avgScore} • Std Dev: {stdScore} • Total: {cosine_similarity.total_pairs} items
-            </p>
-          </div>
-
-          {/* Scrollable List */}
-          <div
-            className="overflow-y-auto"
-            style={{
-              maxHeight: '300px'
-            }}
-          >
-            {cosine_similarity.per_item_scores.map((item, index) => {
-              const itemScore = item.cosine_similarity.toFixed(2);
-              const itemColors = getScoreColor(item.cosine_similarity);
-
-              return (
-                <div
-                  key={item.trace_id}
-                  className="px-4 py-2.5 border-b transition-colors"
-                  style={{
-                    borderColor: 'hsl(0, 0%, 92%)',
-                    backgroundColor: 'transparent'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 98%)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    {/* Trace ID */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                          Trace ID #{index + 1}:
-                        </span>
-                        <code
-                          className="text-xs font-mono truncate"
-                          style={{ color: 'hsl(330, 3%, 19%)' }}
-                          title={item.trace_id}
-                        >
-                          {item.trace_id}
-                        </code>
-                      </div>
-                    </div>
-
-                    {/* Score Badge */}
-                    <div
-                      className="px-2.5 py-1 rounded text-xs font-semibold whitespace-nowrap"
-                      style={{
-                        backgroundColor: itemColors.bg,
-                        borderWidth: '1px',
-                        borderColor: itemColors.border,
-                        color: itemColors.text
-                      }}
-                    >
-                      {itemScore}
-                    </div>
-                  </div>
-
-                  {/* Visual Bar */}
-                  <div
-                    className="mt-1.5 h-1.5 rounded-full overflow-hidden"
-                    style={{ backgroundColor: 'hsl(0, 0%, 92%)' }}
-                  >
-                    <div
-                      className="h-full rounded-full transition-all duration-300"
-                      style={{
-                        width: `${item.cosine_similarity * 100}%`,
-                        backgroundColor: itemColors.text
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Footer */}
-          <div className="px-4 py-2 border-t text-center" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
-            <p className="text-xs" style={{ color: 'hsl(330, 3%, 49%)' }}>
-              Hover to keep open • Move away to close
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+// ScoreDisplay component is now imported from '../components/ScoreDisplay'
 
 // ============ RESULTS MODAL COMPONENT ============
 interface ResultsModalProps {
@@ -1508,8 +1161,12 @@ function ResultsModal({ job, assistantConfig, onClose }: ResultsModalProps) {
 
   // Export to CSV
   const handleExportCSV = () => {
-    if (!job.score || !job.score.cosine_similarity) {
-      alert('No data available to export');
+    if (!job.score ||
+        !job.score.cosine_similarity ||
+        !Array.isArray(job.score.cosine_similarity.per_item_scores) ||
+        typeof job.score.cosine_similarity.avg !== 'number' ||
+        typeof job.score.cosine_similarity.std !== 'number') {
+      alert('No valid data available to export');
       return;
     }
 
@@ -1524,7 +1181,12 @@ function ResultsModal({ job, assistantConfig, onClose }: ResultsModalProps) {
     csvContent += 'Trace ID,Item Similarity Score\n';
 
     // Data rows - one row per item
-    cosine_similarity.per_item_scores.forEach((item, index) => {
+    cosine_similarity.per_item_scores.forEach((item) => {
+      // Skip items with invalid data
+      if (!item || typeof item.cosine_similarity !== 'number') {
+        return;
+      }
+
       const row = [
         job.id,
         `"${job.run_name}"`,
@@ -1538,7 +1200,7 @@ function ResultsModal({ job, assistantConfig, onClose }: ResultsModalProps) {
         cosine_similarity.avg.toFixed(2),
         cosine_similarity.std.toFixed(2),
         cosine_similarity.total_pairs,
-        item.trace_id,
+        item.trace_id || 'N/A',
         item.cosine_similarity.toFixed(2)
       ].join(',');
 
@@ -1555,40 +1217,24 @@ function ResultsModal({ job, assistantConfig, onClose }: ResultsModalProps) {
     document.body.removeChild(link);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-      case 'success':
-        return { bg: 'hsl(134, 61%, 95%)', border: 'hsl(134, 61%, 70%)', text: 'hsl(134, 61%, 25%)' };
-      case 'processing':
-      case 'pending':
-      case 'queued':
-        return { bg: 'hsl(46, 100%, 95%)', border: 'hsl(46, 100%, 80%)', text: 'hsl(46, 100%, 25%)' };
-      case 'failed':
-      case 'error':
-        return { bg: 'hsl(8, 86%, 95%)', border: 'hsl(8, 86%, 80%)', text: 'hsl(8, 86%, 40%)' };
-      default:
-        return { bg: 'hsl(0, 0%, 100%)', border: 'hsl(0, 0%, 85%)', text: 'hsl(330, 3%, 49%)' };
-    }
-  };
-
-  const getScoreColor = (similarity: number) => {
-    if (similarity >= 0.7) {
-      return { bg: 'hsl(134, 61%, 95%)', border: 'hsl(134, 61%, 70%)', text: 'hsl(134, 61%, 25%)' };
-    } else if (similarity >= 0.5) {
-      return { bg: 'hsl(46, 100%, 95%)', border: 'hsl(46, 100%, 80%)', text: 'hsl(46, 100%, 25%)' };
-    } else {
-      return { bg: 'hsl(8, 86%, 95%)', border: 'hsl(8, 86%, 80%)', text: 'hsl(8, 86%, 40%)' };
-    }
-  };
-
+  // Using imported utility functions: getStatusColor, getScoreColor, formatDate
   const statusColors = getStatusColor(job.status);
-  const formatDate = (dateString: string) => new Date(dateString).toLocaleString();
 
   const hasScore = job.score && job.score.cosine_similarity;
-  const avgScore = hasScore ? job.score.cosine_similarity.avg.toFixed(2) : 'N/A';
-  const stdScore = hasScore ? job.score.cosine_similarity.std.toFixed(2) : 'N/A';
-  const totalPairs = hasScore ? job.score.cosine_similarity.total_pairs : 0;
+  const avgScore = (hasScore && typeof job.score.cosine_similarity.avg === 'number') ? job.score.cosine_similarity.avg.toFixed(2) : 'N/A';
+  const stdScore = (hasScore && typeof job.score.cosine_similarity.std === 'number') ? job.score.cosine_similarity.std.toFixed(2) : 'N/A';
+  const totalPairs = (hasScore && typeof job.score.cosine_similarity.total_pairs === 'number') ? job.score.cosine_similarity.total_pairs : 0;
+
+  // Calculate dynamic thresholds based on the score distribution
+  const dynamicThresholds = useMemo(() => {
+    if (!hasScore || !Array.isArray(job.score.cosine_similarity.per_item_scores)) {
+      return { highThreshold: 0.7, mediumThreshold: 0.5 };
+    }
+    const scores = job.score.cosine_similarity.per_item_scores
+      .filter(item => item && typeof item.cosine_similarity === 'number')
+      .map(item => item.cosine_similarity);
+    return calculateDynamicThresholds(scores);
+  }, [hasScore, job.score]);
 
   return (
     <>
@@ -1757,7 +1403,7 @@ function ResultsModal({ job, assistantConfig, onClose }: ResultsModalProps) {
             )}
 
             {/* Detailed Results Section */}
-            {hasScore && job.score.cosine_similarity.per_item_scores.length > 0 && (
+            {hasScore && Array.isArray(job.score.cosine_similarity?.per_item_scores) && job.score.cosine_similarity.per_item_scores.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'hsl(330, 3%, 49%)' }}>
@@ -1770,9 +1416,21 @@ function ResultsModal({ job, assistantConfig, onClose }: ResultsModalProps) {
                 </div>
                 <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
                   <div className="overflow-y-auto" style={{ maxHeight: '400px' }}>
-                    {job.score.cosine_similarity.per_item_scores.map((item, index) => {
+                    {[...job.score.cosine_similarity.per_item_scores]
+                      .sort((a, b) => {
+                        // Sort in descending order by cosine_similarity
+                        if (!a || typeof a.cosine_similarity !== 'number') return 1;
+                        if (!b || typeof b.cosine_similarity !== 'number') return -1;
+                        return b.cosine_similarity - a.cosine_similarity;
+                      })
+                      .map((item, index) => {
+                      // Defensive null check for item properties
+                      if (!item || typeof item.cosine_similarity !== 'number') {
+                        return null;
+                      }
+
                       const itemScore = item.cosine_similarity.toFixed(2);
-                      const itemColors = getScoreColor(item.cosine_similarity);
+                      const itemColors = getScoreColor(item.cosine_similarity, dynamicThresholds);
 
                       return (
                         <div
@@ -1873,181 +1531,12 @@ function ResultsModal({ job, assistantConfig, onClose }: ResultsModalProps) {
       </div>
 
       {/* Config Modal */}
-      {isConfigModalOpen && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-modalBackdrop"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}
-          onClick={() => setIsConfigModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-lg shadow-2xl animate-modalContent"
-            style={{ backgroundColor: 'hsl(0, 0%, 100%)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Detailed Configuration</h3>
-              </div>
-              <button
-                onClick={() => setIsConfigModalOpen(false)}
-                className="p-2 rounded-md transition-colors"
-                style={{
-                  color: 'hsl(330, 3%, 49%)',
-                  backgroundColor: 'transparent'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 95%)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="overflow-y-auto p-6 space-y-4" style={{ maxHeight: 'calc(80vh - 140px)' }}>
-              {assistantConfig && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Assistant Name</div>
-                  <div className="text-sm font-medium mb-4" style={{ color: 'hsl(330, 3%, 19%)' }}>{assistantConfig.name}</div>
-                </div>
-              )}
-
-              {job.assistant_id && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Assistant ID</div>
-                  <div className="text-sm font-mono mb-4" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.assistant_id}</div>
-                </div>
-              )}
-
-              <div>
-                <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Model</div>
-                <div className="text-sm font-medium mb-4" style={{ color: 'hsl(330, 3%, 19%)' }}>
-                  {assistantConfig?.model || job.config?.model || 'N/A'}
-                </div>
-              </div>
-
-              {(assistantConfig?.temperature !== undefined || job.config?.temperature !== undefined) && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Temperature</div>
-                  <div className="text-sm font-medium mb-4" style={{ color: 'hsl(330, 3%, 19%)' }}>
-                    {assistantConfig?.temperature !== undefined ? assistantConfig.temperature : job.config?.temperature}
-                  </div>
-                </div>
-              )}
-
-              {(assistantConfig?.instructions || job.config?.instructions) && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Instructions</div>
-                  <div className="text-sm p-3 rounded-md font-mono whitespace-pre-wrap border" style={{
-                    backgroundColor: 'hsl(0, 0%, 98%)',
-                    borderColor: 'hsl(0, 0%, 85%)',
-                    color: 'hsl(330, 3%, 19%)',
-                    maxHeight: '300px',
-                    overflowY: 'auto'
-                  }}>
-                    {assistantConfig?.instructions || job.config?.instructions}
-                  </div>
-                </div>
-              )}
-
-              {job.config?.tools && job.config.tools.length > 0 && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Tools</div>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {job.config.tools.map((tool, idx) => (
-                      <span
-                        key={idx}
-                        className="px-3 py-1.5 rounded text-sm font-medium"
-                        style={{
-                          backgroundColor: 'hsl(167, 59%, 95%)',
-                          borderWidth: '1px',
-                          borderColor: 'hsl(167, 59%, 70%)',
-                          color: 'hsl(167, 59%, 22%)'
-                        }}
-                      >
-                        {tool.type}
-                      </span>
-                    ))}
-                  </div>
-                  {job.config.tools.map((tool, idx) => (
-                    tool.vector_store_ids && tool.vector_store_ids.length > 0 && (
-                      <div key={`vs-${idx}`} className="mb-4">
-                        <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                          Vector Store IDs ({tool.type})
-                        </div>
-                        <div className="text-sm font-mono p-3 rounded-md border" style={{
-                          backgroundColor: 'hsl(0, 0%, 98%)',
-                          borderColor: 'hsl(0, 0%, 85%)',
-                          color: 'hsl(330, 3%, 19%)'
-                        }}>
-                          {tool.vector_store_ids.join(', ')}
-                        </div>
-                      </div>
-                    )
-                  ))}
-                </div>
-              )}
-
-              {assistantConfig?.vector_store_ids && assistantConfig.vector_store_ids.length > 0 && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Vector Store IDs</div>
-                  <div className="text-sm font-mono p-3 rounded-md border" style={{
-                    backgroundColor: 'hsl(0, 0%, 98%)',
-                    borderColor: 'hsl(0, 0%, 85%)',
-                    color: 'hsl(330, 3%, 19%)'
-                  }}>
-                    {assistantConfig.vector_store_ids.join(', ')}
-                  </div>
-                </div>
-              )}
-
-              {job.config?.include && job.config.include.length > 0 && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Include</div>
-                  <div className="flex flex-wrap gap-2">
-                    {job.config.include.map((item, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2 py-1 rounded text-xs font-medium"
-                        style={{
-                          backgroundColor: 'hsl(0, 0%, 95%)',
-                          borderWidth: '1px',
-                          borderColor: 'hsl(0, 0%, 85%)',
-                          color: 'hsl(330, 3%, 19%)'
-                        }}
-                      >
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 border-t flex justify-end" style={{ borderColor: 'hsl(0, 0%, 85%)', backgroundColor: 'hsl(0, 0%, 98%)' }}>
-              <button
-                onClick={() => setIsConfigModalOpen(false)}
-                className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                style={{
-                  backgroundColor: 'hsl(167, 59%, 22%)',
-                  color: 'hsl(0, 0%, 100%)'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 28%)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 22%)'}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        job={job}
+        assistantConfig={assistantConfig}
+      />
     </>
   );
 }
@@ -2063,29 +1552,8 @@ function EvalJobCard({ job, assistantConfig }: EvalJobCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-      case 'success':
-        return { bg: 'hsl(134, 61%, 95%)', border: 'hsl(134, 61%, 70%)', text: 'hsl(134, 61%, 25%)' };
-      case 'processing':
-      case 'pending':
-      case 'queued':
-        return { bg: 'hsl(46, 100%, 95%)', border: 'hsl(46, 100%, 80%)', text: 'hsl(46, 100%, 25%)' };
-      case 'failed':
-      case 'error':
-        return { bg: 'hsl(8, 86%, 95%)', border: 'hsl(8, 86%, 80%)', text: 'hsl(8, 86%, 40%)' };
-      default:
-        return { bg: 'hsl(0, 0%, 100%)', border: 'hsl(0, 0%, 85%)', text: 'hsl(330, 3%, 49%)' };
-    }
-  };
-
+  // Using imported utility functions
   const statusColors = getStatusColor(job.status);
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
-  };
-
   return (
     <div className="border rounded-lg" style={{ backgroundColor: 'hsl(0, 0%, 100%)', borderColor: 'hsl(0, 0%, 85%)' }}>
       {/* Header - Always Visible (Clickable) */}
@@ -2215,181 +1683,12 @@ function EvalJobCard({ job, assistantConfig }: EvalJobCardProps) {
       )}
 
       {/* Config Modal */}
-      {isConfigModalOpen && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-modalBackdrop"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}
-          onClick={() => setIsConfigModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-lg shadow-2xl animate-modalContent"
-            style={{ backgroundColor: 'hsl(0, 0%, 100%)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Detailed Configuration</h3>
-              </div>
-              <button
-                onClick={() => setIsConfigModalOpen(false)}
-                className="p-2 rounded-md transition-colors"
-                style={{
-                  color: 'hsl(330, 3%, 49%)',
-                  backgroundColor: 'transparent'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 95%)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="overflow-y-auto p-6 space-y-4" style={{ maxHeight: 'calc(80vh - 140px)' }}>
-              {assistantConfig && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Assistant Name</div>
-                  <div className="text-sm font-medium mb-4" style={{ color: 'hsl(330, 3%, 19%)' }}>{assistantConfig.name}</div>
-                </div>
-              )}
-
-              {job.assistant_id && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Assistant ID</div>
-                  <div className="text-sm font-mono mb-4" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.assistant_id}</div>
-                </div>
-              )}
-
-              <div>
-                <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Model</div>
-                <div className="text-sm font-medium mb-4" style={{ color: 'hsl(330, 3%, 19%)' }}>
-                  {assistantConfig?.model || job.config?.model || 'N/A'}
-                </div>
-              </div>
-
-              {(assistantConfig?.temperature !== undefined || job.config?.temperature !== undefined) && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Temperature</div>
-                  <div className="text-sm font-medium mb-4" style={{ color: 'hsl(330, 3%, 19%)' }}>
-                    {assistantConfig?.temperature !== undefined ? assistantConfig.temperature : job.config?.temperature}
-                  </div>
-                </div>
-              )}
-
-              {(assistantConfig?.instructions || job.config?.instructions) && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Instructions</div>
-                  <div className="text-sm p-3 rounded-md font-mono whitespace-pre-wrap border" style={{
-                    backgroundColor: 'hsl(0, 0%, 98%)',
-                    borderColor: 'hsl(0, 0%, 85%)',
-                    color: 'hsl(330, 3%, 19%)',
-                    maxHeight: '300px',
-                    overflowY: 'auto'
-                  }}>
-                    {assistantConfig?.instructions || job.config?.instructions}
-                  </div>
-                </div>
-              )}
-
-              {job.config?.tools && job.config.tools.length > 0 && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Tools</div>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {job.config.tools.map((tool, idx) => (
-                      <span
-                        key={idx}
-                        className="px-3 py-1.5 rounded text-sm font-medium"
-                        style={{
-                          backgroundColor: 'hsl(167, 59%, 95%)',
-                          borderWidth: '1px',
-                          borderColor: 'hsl(167, 59%, 70%)',
-                          color: 'hsl(167, 59%, 22%)'
-                        }}
-                      >
-                        {tool.type}
-                      </span>
-                    ))}
-                  </div>
-                  {job.config.tools.map((tool, idx) => (
-                    tool.vector_store_ids && tool.vector_store_ids.length > 0 && (
-                      <div key={`vs-${idx}`} className="mb-4">
-                        <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                          Vector Store IDs ({tool.type})
-                        </div>
-                        <div className="text-sm font-mono p-3 rounded-md border" style={{
-                          backgroundColor: 'hsl(0, 0%, 98%)',
-                          borderColor: 'hsl(0, 0%, 85%)',
-                          color: 'hsl(330, 3%, 19%)'
-                        }}>
-                          {tool.vector_store_ids.join(', ')}
-                        </div>
-                      </div>
-                    )
-                  ))}
-                </div>
-              )}
-
-              {assistantConfig?.vector_store_ids && assistantConfig.vector_store_ids.length > 0 && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Vector Store IDs</div>
-                  <div className="text-sm font-mono p-3 rounded-md border" style={{
-                    backgroundColor: 'hsl(0, 0%, 98%)',
-                    borderColor: 'hsl(0, 0%, 85%)',
-                    color: 'hsl(330, 3%, 19%)'
-                  }}>
-                    {assistantConfig.vector_store_ids.join(', ')}
-                  </div>
-                </div>
-              )}
-
-              {job.config?.include && job.config.include.length > 0 && (
-                <div>
-                  <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Include</div>
-                  <div className="flex flex-wrap gap-2">
-                    {job.config.include.map((item, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2 py-1 rounded text-xs font-medium"
-                        style={{
-                          backgroundColor: 'hsl(0, 0%, 95%)',
-                          borderWidth: '1px',
-                          borderColor: 'hsl(0, 0%, 85%)',
-                          color: 'hsl(330, 3%, 19%)'
-                        }}
-                      >
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 border-t flex justify-end" style={{ borderColor: 'hsl(0, 0%, 85%)', backgroundColor: 'hsl(0, 0%, 98%)' }}>
-              <button
-                onClick={() => setIsConfigModalOpen(false)}
-                className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                style={{
-                  backgroundColor: 'hsl(167, 59%, 22%)',
-                  color: 'hsl(0, 0%, 100%)'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 28%)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 22%)'}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        job={job}
+        assistantConfig={assistantConfig}
+      />
     </div>
   );
 }
