@@ -1,0 +1,211 @@
+{
+  "id": 43,
+  "run_name": "Hindi FAQ Evaluation - Run 1",
+  "dataset_name": "hindi_policy_qa_5_rows",
+  "config": {
+    "model": "gpt-4",
+    "instructions": "You are a helpful FAQ assistant for policy questions.",
+    "temperature": 0.7
+  },
+  "assistant_id": null,
+  "dataset_id": 50,
+  "batch_job_id": 71,
+  "embedding_batch_job_id": 72,
+  "status": "completed",
+  "object_store_url": "s3://ai-platform-documents-staging/evaluations/43",
+  "total_items": 4,
+  "scores": {
+    "summary_scores": [
+      {
+        "name": "cosine_similarity",
+        "avg": 0.45267303673682135,
+        "std": 0.06016189626290471,
+        "total_pairs": 4,
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "SNEHA correctness",
+        "avg": 0.25,
+        "std": 0.4330127018922193,
+        "total_pairs": 4,
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "llm_judge_relevance",
+        "avg": 0.75,
+        "std": 0.25,
+        "total_pairs": 4,
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "response_category",
+        "distribution": {
+          "CORRECT": 1,
+          "PARTIAL": 2,
+          "INCORRECT": 1
+        },
+        "total_pairs": 4,
+        "data_type": "CATEGORICAL"
+      }
+    ],
+    "individual_scores": [
+      {
+        "trace_id": "97ec280e-883e-450e-a3e9-6cd8cfc0741a",
+        "input": {
+          "question": "सीएलएफ में उपसमिति के कार्य की समीक्षा कौन करता है?"
+        },
+        "output": {
+          "answer": "सीएलएफ (CLF) में उपसमिति के कार्य की समीक्षा मुख्य रूप से सीएलएफ की प्रबंधन समिति या संबंधित अधिकृत प्रतिनिधि द्वारा की जाती है।"
+        },
+        "metadata": {
+          "ground_truth": "सीएलएफ (Cluster Level Federation) में उपसमिति के कार्य की समीक्षा कार्यकारिणी समिति (Executive Committee) करती है।",
+          "item_id": "f444e132-6a25-403e-b0fa-9fd0c5452248",
+          "response_id": "resp_0a2a9f840105b5ca006923fa5855f8819680d7c280c082011f"
+        },
+        "trace_scores": [
+          {
+            "name": "cosine_similarity",
+            "value": 0.45159810574988546,
+            "data_type": "NUMERIC"
+          },
+          {
+            "name": "SNEHA correctness",
+            "value": 0,
+            "data_type": "NUMERIC",
+            "comment": "The generation incorrectly claims there is no information about the specific committee"
+          },
+          {
+            "name": "llm_judge_relevance",
+            "value": 0.5,
+            "data_type": "NUMERIC",
+            "comment": "Response is somewhat relevant but misses key details"
+          },
+          {
+            "name": "response_category",
+            "value": "INCORRECT",
+            "data_type": "CATEGORICAL"
+          }
+        ]
+      },
+      {
+        "trace_id": "f1833206-e9b6-49ac-864c-90dea4076fa9",
+        "input": {
+          "question": "ग्राम संगठन की बैठक में कितने सदस्यों की उपस्थिति आवश्यक है?"
+        },
+        "output": {
+          "answer": "ग्राम संगठन की बैठक में कम से कम 50% सदस्यों की उपस्थिति आवश्यक है। यह गणपूर्ति सुनिश्चित करती है कि निर्णय लोकतांत्रिक और प्रतिनिधि हों।"
+        },
+        "metadata": {
+          "ground_truth": "ग्राम संगठन की बैठक में कम से कम 50% सदस्यों की उपस्थिति आवश्यक है।",
+          "item_id": "a234b567-8901-234c-567d-890123456789",
+          "response_id": "resp_1b3c5d7e9f11a13b15c17d19e21f23a25b27c29d31e33f35a37b"
+        },
+        "trace_scores": [
+          {
+            "name": "cosine_similarity",
+            "value": 0.4654791998066623,
+            "data_type": "NUMERIC"
+          },
+          {
+            "name": "SNEHA correctness",
+            "value": 1,
+            "data_type": "NUMERIC",
+            "comment": "Response correctly identifies all key points"
+          },
+          {
+            "name": "llm_judge_relevance",
+            "value": 1,
+            "data_type": "NUMERIC",
+            "comment": "Highly relevant and accurate response"
+          },
+          {
+            "name": "response_category",
+            "value": "CORRECT",
+            "data_type": "CATEGORICAL"
+          }
+        ]
+      },
+      {
+        "trace_id": "b4a85769-96e2-402b-ab79-c1338e85c8b1",
+        "input": {
+          "question": "स्वयं सहायता समूह में कितनी महिलाएं होनी चाहिए?"
+        },
+        "output": {
+          "answer": "स्वयं सहायता समूह में आमतौर पर 10-20 महिलाएं होनी चाहिए। यह आदर्श संख्या समूह की प्रभावी कार्यप्रणाली के लिए उपयुक्त मानी जाती है।"
+        },
+        "metadata": {
+          "ground_truth": "स्वयं सहायता समूह में 10-20 महिलाएं होनी चाहिए। यह आदर्श संख्या प्रभावी संचालन और प्रबंधन के लिए उपयुक्त है। **Policy Source:** SHG Formation Guidelines",
+          "item_id": "c345d678-9012-345e-678f-901234567890",
+          "response_id": "resp_2c4d6e8f10a12b14c16d18e20f22a24b26c28d30e32f34a36c"
+        },
+        "trace_scores": [
+          {
+            "name": "cosine_similarity",
+            "value": 0.5311989216166836,
+            "data_type": "NUMERIC"
+          },
+          {
+            "name": "SNEHA correctness",
+            "value": 0,
+            "data_type": "NUMERIC",
+            "comment": "Missing policy source and reference"
+          },
+          {
+            "name": "llm_judge_relevance",
+            "value": 0.75,
+            "data_type": "NUMERIC",
+            "comment": "Good coverage but incomplete"
+          },
+          {
+            "name": "response_category",
+            "value": "PARTIAL",
+            "data_type": "CATEGORICAL"
+          }
+        ]
+      },
+      {
+        "trace_id": "51c505d8-efe0-454a-a339-f42a13fe94b8",
+        "input": {
+          "question": "समुदाय संसाधन व्यक्ति (CRP) का मुख्य कार्य क्या है?"
+        },
+        "output": {
+          "answer": "समुदाय संसाधन व्यक्ति (CRP) का मुख्य कार्य समूहों को प्रशिक्षण देना और उन्हें तकनीकी सहायता प्रदान करना है।"
+        },
+        "metadata": {
+          "ground_truth": "समुदाय संसाधन व्यक्ति (CRP) का मुख्य कार्य SHG सदस्यों को प्रशिक्षण, क्षमता निर्माण, और सामुदायिक संगठन में सहायता प्रदान करना है। वे फील्ड-स्तरीय सहायता और मेंटरशिप भी प्रदान करते हैं।",
+          "item_id": "d456e789-0123-456f-789g-012345678901",
+          "response_id": "resp_3d5e7f9g11a13b15c17d19e21f23a25b27c29d31e33f35a37d"
+        },
+        "trace_scores": [
+          {
+            "name": "cosine_similarity",
+            "value": 0.36241591977405424,
+            "data_type": "NUMERIC"
+          },
+          {
+            "name": "SNEHA correctness",
+            "value": 0,
+            "data_type": "NUMERIC",
+            "comment": "Factually incomplete - misses key responsibilities"
+          },
+          {
+            "name": "llm_judge_relevance",
+            "value": 0.5,
+            "data_type": "NUMERIC",
+            "comment": "Tangentially related but misses main point"
+          },
+          {
+            "name": "response_category",
+            "value": "PARTIAL",
+            "data_type": "CATEGORICAL"
+          }
+        ]
+      }
+    ]
+  },
+  "error_message": null,
+  "organization_id": 1,
+  "project_id": 1,
+  "inserted_at": "2025-11-17T11:07:44.609916",
+  "updated_at": "2025-11-17T11:18:44.235194"
+}

@@ -77,7 +77,7 @@ export const getScoreColor = (
   if (similarity >= highThreshold) {
     return { bg: 'hsl(134, 61%, 95%)', border: 'hsl(134, 61%, 70%)', text: 'hsl(134, 61%, 25%)' };
   } else if (similarity >= mediumThreshold) {
-    return { bg: 'hsl(46, 100%, 97%)', border: 'hsl(46, 100%, 85%)', text: 'hsla(50, 77%, 63%, 1.00)' };
+    return { bg: 'hsl(46, 100%, 97%)', border: 'hsl(46, 100%, 85%)', text: 'hsla(50, 84%, 58%, 1.00)' };
   } else {
     return { bg: 'hsl(8, 86%, 95%)', border: 'hsl(8, 86%, 80%)', text: 'hsl(8, 86%, 40%)' };
   }

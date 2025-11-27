@@ -5,7 +5,7 @@
 
 "use client"
 import React, { useState, useMemo } from 'react';
-import { ScoreObject } from './types';
+import { ScoreObject, isLegacyScoreObject, isNewScoreObject } from './types';
 import { getScoreColor, calculateDynamicThresholds } from './utils';
 
 interface ScoreDisplayProps {
@@ -46,13 +46,76 @@ export default function ScoreDisplay({ score, errorMessage }: ScoreDisplayProps)
           color: 'hsl(330, 3%, 49%)'
         }}
       >
-        <span className="font-medium">Similarity Score:</span>
+        <span className="font-medium">Score:</span>
         <span>N/A</span>
         {errorMessage && (
           <span className="text-xs" style={{ color: 'hsl(8, 86%, 40%)' }}>
             (Error)
           </span>
         )}
+      </div>
+    );
+  }
+
+  // Handle new score format - show summary instead of drilldown
+  if (isNewScoreObject(score)) {
+    const cosineSimilarity = score.summary_scores.find(s => s.name === 'cosine_similarity');
+    if (cosineSimilarity && typeof cosineSimilarity.avg === 'number') {
+      const avgScore = cosineSimilarity.avg.toFixed(2);
+      const stdScore = cosineSimilarity.std ? cosineSimilarity.std.toFixed(2) : 'N/A';
+
+      return (
+        <div
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm"
+          style={{
+            backgroundColor: 'hsl(0, 0%, 98%)',
+            borderWidth: '1px',
+            borderColor: 'hsl(0, 0%, 85%)',
+            color: 'hsl(330, 3%, 19%)'
+          }}
+        >
+          <span className="font-medium">Similarity Score:</span>
+          <span className="font-semibold">{avgScore}</span>
+          <span className="text-xs" style={{ color: 'hsl(330, 3%, 49%)' }}>
+            ±{stdScore}
+          </span>
+          <span className="text-xs" style={{ color: 'hsl(330, 3%, 49%)' }}>
+            ({cosineSimilarity.total_pairs} pairs)
+          </span>
+        </div>
+      );
+    }
+    // No cosine similarity in new format
+    return (
+      <div
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm"
+        style={{
+          backgroundColor: 'hsl(0, 0%, 95%)',
+          borderWidth: '1px',
+          borderColor: 'hsl(0, 0%, 85%)',
+          color: 'hsl(330, 3%, 49%)'
+        }}
+      >
+        <span className="font-medium">Score:</span>
+        <span>{score.summary_scores.length} metrics</span>
+      </div>
+    );
+  }
+
+  // Handle legacy score format
+  if (!isLegacyScoreObject(score)) {
+    return (
+      <div
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm"
+        style={{
+          backgroundColor: 'hsl(0, 0%, 95%)',
+          borderWidth: '1px',
+          borderColor: 'hsl(0, 0%, 85%)',
+          color: 'hsl(330, 3%, 49%)'
+        }}
+      >
+        <span className="font-medium">Score:</span>
+        <span>Invalid Data</span>
       </div>
     );
   }

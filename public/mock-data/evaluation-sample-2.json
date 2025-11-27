@@ -1,0 +1,173 @@
+{
+  "id": 44,
+  "run_name": "English FAQ Evaluation - Test Run",
+  "dataset_name": "english_policy_qa_3_rows",
+  "config": {
+    "model": "gpt-4-turbo",
+    "instructions": "You are a helpful assistant answering policy-related questions.",
+    "temperature": 0.3
+  },
+  "assistant_id": "asst_abc123xyz",
+  "dataset_id": 51,
+  "batch_job_id": 73,
+  "embedding_batch_job_id": 74,
+  "status": "completed",
+  "object_store_url": "s3://ai-platform-documents-staging/evaluations/44",
+  "total_items": 3,
+  "scores": {
+    "summary_scores": [
+      {
+        "name": "cosine_similarity",
+        "avg": 0.782,
+        "std": 0.123,
+        "total_pairs": 3,
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "SNEHA correctness",
+        "avg": 0.667,
+        "std": 0.471,
+        "total_pairs": 3,
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "llm_judge_relevance",
+        "avg": 0.833,
+        "std": 0.236,
+        "total_pairs": 3,
+        "data_type": "NUMERIC"
+      },
+      {
+        "name": "response_category",
+        "distribution": {
+          "CORRECT": 2,
+          "PARTIAL": 1,
+          "INCORRECT": 0
+        },
+        "total_pairs": 3,
+        "data_type": "CATEGORICAL"
+      }
+    ],
+    "individual_scores": [
+      {
+        "trace_id": "aaa11111-1111-1111-1111-111111111111",
+        "input": {
+          "question": "What is the minimum attendance required for a Village Organization meeting?"
+        },
+        "output": {
+          "answer": "The minimum attendance required for a Village Organization meeting is 50% of the total members. This quorum ensures that decisions are representative and democratic."
+        },
+        "metadata": {
+          "ground_truth": "A minimum of 50% of members must be present for a Village Organization meeting to proceed with decision-making. This is specified in the Community Operational Manual.",
+          "item_id": "item-001",
+          "response_id": "resp-eng-001"
+        },
+        "trace_scores": [
+          {
+            "name": "cosine_similarity",
+            "value": 0.89,
+            "data_type": "NUMERIC"
+          },
+          {
+            "name": "SNEHA correctness",
+            "value": 1,
+            "data_type": "NUMERIC",
+            "comment": "Accurate and complete response"
+          },
+          {
+            "name": "llm_judge_relevance",
+            "value": 1,
+            "data_type": "NUMERIC",
+            "comment": "Fully relevant with additional context"
+          },
+          {
+            "name": "response_category",
+            "value": "CORRECT",
+            "data_type": "CATEGORICAL"
+          }
+        ]
+      },
+      {
+        "trace_id": "bbb22222-2222-2222-2222-222222222222",
+        "input": {
+          "question": "How many women should be in a Self Help Group?"
+        },
+        "output": {
+          "answer": "A Self Help Group should typically have between 10 to 20 women members."
+        },
+        "metadata": {
+          "ground_truth": "A Self Help Group (SHG) should have 10-20 women members for effective operation and management.",
+          "item_id": "item-002",
+          "response_id": "resp-eng-002"
+        },
+        "trace_scores": [
+          {
+            "name": "cosine_similarity",
+            "value": 0.85,
+            "data_type": "NUMERIC"
+          },
+          {
+            "name": "SNEHA correctness",
+            "value": 1,
+            "data_type": "NUMERIC",
+            "comment": "Correct range provided"
+          },
+          {
+            "name": "llm_judge_relevance",
+            "value": 0.9,
+            "data_type": "NUMERIC",
+            "comment": "Directly answers the question"
+          },
+          {
+            "name": "response_category",
+            "value": "CORRECT",
+            "data_type": "CATEGORICAL"
+          }
+        ]
+      },
+      {
+        "trace_id": "ccc33333-3333-3333-3333-333333333333",
+        "input": {
+          "question": "What are the responsibilities of a Community Resource Person?"
+        },
+        "output": {
+          "answer": "A Community Resource Person (CRP) is responsible for providing training and technical support to groups."
+        },
+        "metadata": {
+          "ground_truth": "A Community Resource Person (CRP) provides training, capacity building, field-level support, mentorship, and assists in community organization activities for SHG members.",
+          "item_id": "item-003",
+          "response_id": "resp-eng-003"
+        },
+        "trace_scores": [
+          {
+            "name": "cosine_similarity",
+            "value": 0.601,
+            "data_type": "NUMERIC"
+          },
+          {
+            "name": "SNEHA correctness",
+            "value": 0,
+            "data_type": "NUMERIC",
+            "comment": "Incomplete - missing key responsibilities like mentorship and capacity building"
+          },
+          {
+            "name": "llm_judge_relevance",
+            "value": 0.6,
+            "data_type": "NUMERIC",
+            "comment": "Partially relevant but lacks detail"
+          },
+          {
+            "name": "response_category",
+            "value": "PARTIAL",
+            "data_type": "CATEGORICAL"
+          }
+        ]
+      }
+    ]
+  },
+  "error_message": null,
+  "organization_id": 1,
+  "project_id": 1,
+  "inserted_at": "2025-11-18T09:30:15.123456",
+  "updated_at": "2025-11-18T09:42:30.654321"
+}

@@ -7,14 +7,14 @@
  */
 
 "use client"
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import {format, toZonedTime} from "date-fns-tz"
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { APIKey } from '../keystore/page';
 import { STORAGE_KEY } from '../keystore/page';
 import { Dataset, DATASETS_STORAGE_KEY, UploadDatasetModal } from '../datasets/page';
 import { EvalJob, AssistantConfig, ScoreObject } from '../components/types';
-import { formatDate, getStatusColor, getScoreColor, calculateDynamicThresholds } from '../components/utils';
+import { formatDate, getStatusColor } from '../components/utils';
 import ConfigModal from '../components/ConfigModal';
 import StatusBadge from '../components/StatusBadge';
 import ScoreDisplay from '../components/ScoreDisplay';
@@ -23,8 +23,16 @@ import TabNavigation from '../components/TabNavigation';
 
 type Tab = 'upload' | 'results';
 
-export default function SimplifiedEval() {
-  const [activeTab, setActiveTab] = useState<Tab>('upload');
+function SimplifiedEvalContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Initialize activeTab from URL query parameter, default to 'upload'
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const tabParam = searchParams.get('tab');
+    return (tabParam === 'results' || tabParam === 'upload') ? tabParam as Tab : 'upload';
+  });
+
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
@@ -50,8 +58,6 @@ export default function SimplifiedEval() {
   const [maxNumResults, setMaxNumResults] = useState<string>('3');
   const [assistantId, setAssistantId] = useState<string>('');
   const [useAssistantId, setUseAssistantId] = useState<boolean>(false);
-
-  const router = useRouter();
 
   // Load API keys from localStorage and auto-select if only one exists
   useEffect(() => {
@@ -1129,418 +1135,6 @@ function ResultsTab({ apiKeys, selectedKeyId }: ResultsTabProps) {
   );
 }
 
-// ============ SCORE DISPLAY COMPONENT ============
-// ScoreDisplay component is now imported from '../components/ScoreDisplay'
-
-// ============ RESULTS MODAL COMPONENT ============
-interface ResultsModalProps {
-  job: EvalJob | null;
-  assistantConfig?: AssistantConfig;
-  onClose: () => void;
-}
-
-function ResultsModal({ job, assistantConfig, onClose }: ResultsModalProps) {
-  if (!job) return null;
-
-  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-
-  // Handle ESC key
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (isConfigModalOpen) {
-          setIsConfigModalOpen(false);
-        } else {
-          onClose();
-        }
-      }
-    };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [onClose, isConfigModalOpen]);
-
-  // Export to CSV
-  const handleExportCSV = () => {
-    if (!job.score ||
-        !job.score.cosine_similarity ||
-        !Array.isArray(job.score.cosine_similarity.per_item_scores) ||
-        typeof job.score.cosine_similarity.avg !== 'number' ||
-        typeof job.score.cosine_similarity.std !== 'number') {
-      alert('No valid data available to export');
-      return;
-    }
-
-    const { cosine_similarity } = job.score;
-
-    // Build CSV content
-    let csvContent = 'data:text/csv;charset=utf-8,';
-
-    // Header row
-    csvContent += 'Job ID,Run Name,Dataset,Model,Assistant ID,Assistant Name,Temperature,Status,Total Items,';
-    csvContent += 'Average Similarity,Standard Deviation,Total Q&A Pairs,';
-    csvContent += 'Trace ID,Item Similarity Score\n';
-
-    // Data rows - one row per item
-    cosine_similarity.per_item_scores.forEach((item) => {
-      // Skip items with invalid data
-      if (!item || typeof item.cosine_similarity !== 'number') {
-        return;
-      }
-
-      const row = [
-        job.id,
-        `"${job.run_name}"`,
-        `"${job.dataset_name}"`,
-        assistantConfig?.model || job.config?.model || 'N/A',
-        job.assistant_id || 'N/A',
-        assistantConfig?.name ? `"${assistantConfig.name}"` : 'N/A',
-        assistantConfig?.temperature !== undefined ? assistantConfig.temperature : 'N/A',
-        job.status,
-        job.total_items,
-        cosine_similarity.avg.toFixed(2),
-        cosine_similarity.std.toFixed(2),
-        cosine_similarity.total_pairs,
-        item.trace_id || 'N/A',
-        item.cosine_similarity.toFixed(2)
-      ].join(',');
-
-      csvContent += row + '\n';
-    });
-
-    // Create download link
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `evaluation_${job.id}_${job.run_name.replace(/[^a-z0-9]/gi, '_')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Using imported utility functions: getStatusColor, getScoreColor, formatDate
-  const statusColors = getStatusColor(job.status);
-
-  const hasScore = job.score && job.score.cosine_similarity;
-  const avgScore = (hasScore && typeof job.score.cosine_similarity.avg === 'number') ? job.score.cosine_similarity.avg.toFixed(2) : 'N/A';
-  const stdScore = (hasScore && typeof job.score.cosine_similarity.std === 'number') ? job.score.cosine_similarity.std.toFixed(2) : 'N/A';
-  const totalPairs = (hasScore && typeof job.score.cosine_similarity.total_pairs === 'number') ? job.score.cosine_similarity.total_pairs : 0;
-
-  // Calculate dynamic thresholds based on the score distribution
-  const dynamicThresholds = useMemo(() => {
-    if (!hasScore || !Array.isArray(job.score.cosine_similarity.per_item_scores)) {
-      return { highThreshold: 0.7, mediumThreshold: 0.5 };
-    }
-    const scores = job.score.cosine_similarity.per_item_scores
-      .filter(item => item && typeof item.cosine_similarity === 'number')
-      .map(item => item.cosine_similarity);
-    return calculateDynamicThresholds(scores);
-  }, [hasScore, job.score]);
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-modalBackdrop"
-        style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)' }}
-        onClick={onClose}
-      >
-        {/* Modal Content */}
-        <div
-          className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-lg shadow-2xl animate-modalContent"
-          style={{ backgroundColor: 'hsl(0, 0%, 100%)' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
-            <div>
-              <h2 className="text-2xl font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>
-                Evaluation Report
-              </h2>
-              <p className="text-sm mt-1" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                {job.run_name}
-              </p>
-              {assistantConfig && (
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-xs px-2 py-1 rounded-md font-medium" style={{
-                    backgroundColor: 'hsl(167, 59%, 95%)',
-                    color: 'hsl(167, 59%, 22%)',
-                    borderWidth: '1px',
-                    borderColor: 'hsl(167, 59%, 70%)'
-                  }}>
-                    Assistant: {assistantConfig.name}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setIsConfigModalOpen(true)}
-                className="px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                style={{
-                  backgroundColor: 'hsl(0, 0%, 100%)',
-                  borderWidth: '1px',
-                  borderColor: 'hsl(167, 59%, 70%)',
-                  color: 'hsl(167, 59%, 22%)'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 95%)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 100%)'}
-              >
-                View Config
-              </button>
-              <button
-                onClick={onClose}
-                className="p-2 rounded-md transition-colors"
-                style={{
-                  color: 'hsl(330, 3%, 49%)',
-                  backgroundColor: 'transparent'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 95%)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {/* Scrollable Content */}
-          <div className="overflow-y-auto p-6 space-y-6" style={{ maxHeight: 'calc(90vh - 200px)' }}>
-            {/* Summary Section */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Summary</h3>
-                {assistantConfig && (
-                  <span className="text-xs px-2 py-1 rounded-md font-medium ml-auto" style={{
-                    backgroundColor: 'hsl(167, 59%, 95%)',
-                    color: 'hsl(167, 59%, 22%)',
-                    borderWidth: '1px',
-                    borderColor: 'hsl(167, 59%, 70%)'
-                  }}>
-                    Assistant: {assistantConfig.name}
-                  </span>
-                )}
-              </div>
-              <div className="border rounded-lg p-4" style={{ backgroundColor: 'hsl(0, 0%, 98%)', borderColor: 'hsl(0, 0%, 85%)' }}>
-                <div className="flex justify-between  gap-4">
-                  <div>
-                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Dataset</div>
-                    <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.dataset_name}</div>
-                  </div>
-                   {/* <div>
-                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Total Q&A Pairs</div>
-                    <div className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{job.total_items}</div>
-                  </div> */}
-                  <div>
-                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Status</div>
-                    <div
-                      className="inline-block px-2 py-1 rounded text-xs font-semibold"
-                      style={{
-                        backgroundColor: statusColors.bg,
-                        borderWidth: '1px',
-                        borderColor: statusColors.border,
-                        color: statusColors.text
-                      }}
-                    >
-                      {job.status.toUpperCase()}
-                    </div>
-                  </div>
-                 
-                </div>
-                <div className="flex justify-between gap-4 mt-4 pt-4 border-t" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
-                  <div>
-                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Started At</div>
-                    <div className="text-sm" style={{ color: 'hsl(330, 3%, 19%)' }}>{formatDate(job.inserted_at)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase font-semibold mb-1" style={{ color: 'hsl(330, 3%, 49%)' }}>Last Updated At</div>
-                    <div className="text-sm" style={{ color: 'hsl(330, 3%, 19%)' }}>{formatDate(job.updated_at)}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Metrics Section */}
-            {hasScore ? (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Metrics Overview</h3>
-                </div>
-                <div className="border rounded-lg p-4" style={{ backgroundColor: 'hsl(0, 0%, 98%)', borderColor: 'hsl(0, 0%, 85%)' }}>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center">
-                      <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Average Similarity</div>
-                      <div className="text-3xl font-bold" style={{ color: 'hsl(167, 59%, 22%)' }}>{avgScore}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Standard Deviation</div>
-                      <div className="text-3xl font-bold" style={{ color: 'hsl(330, 3%, 49%)' }}>±{stdScore}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xs uppercase font-semibold mb-2" style={{ color: 'hsl(330, 3%, 49%)' }}>Total Q&A Pairs</div>
-                      <div className="text-3xl font-bold" style={{ color: 'hsl(330, 3%, 19%)' }}>{totalPairs}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="border rounded-lg p-6 text-center" style={{ backgroundColor: 'hsl(8, 86%, 95%)', borderColor: 'hsl(8, 86%, 80%)' }}>
-                <p className="text-sm font-medium" style={{ color: 'hsl(8, 86%, 40%)' }}>
-                  {job.error_message ? 'Evaluation Failed' : 'No results available yet'}
-                </p>
-                {job.error_message && (
-                  <p className="text-xs mt-2" style={{ color: 'hsl(8, 86%, 40%)' }}>
-                    {job.error_message}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Detailed Results Section */}
-            {hasScore && Array.isArray(job.score.cosine_similarity?.per_item_scores) && job.score.cosine_similarity.per_item_scores.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                  </svg>
-                  <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Detailed Results</h3>
-                  <span className="text-sm" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                    ({job.score.cosine_similarity.per_item_scores.length} items)
-                  </span>
-                </div>
-                <div className="border rounded-lg overflow-hidden" style={{ borderColor: 'hsl(0, 0%, 85%)' }}>
-                  <div className="overflow-y-auto" style={{ maxHeight: '400px' }}>
-                    {[...job.score.cosine_similarity.per_item_scores]
-                      .sort((a, b) => {
-                        // Sort in descending order by cosine_similarity
-                        if (!a || typeof a.cosine_similarity !== 'number') return 1;
-                        if (!b || typeof b.cosine_similarity !== 'number') return -1;
-                        return b.cosine_similarity - a.cosine_similarity;
-                      })
-                      .map((item, index) => {
-                      // Defensive null check for item properties
-                      if (!item || typeof item.cosine_similarity !== 'number') {
-                        return null;
-                      }
-
-                      const itemScore = item.cosine_similarity.toFixed(2);
-                      const itemColors = getScoreColor(item.cosine_similarity, dynamicThresholds);
-
-                      return (
-                        <div
-                          key={item.trace_id}
-                          className="px-4 py-3 border-b transition-colors"
-                          style={{
-                            borderColor: 'hsl(0, 0%, 92%)',
-                            backgroundColor: 'hsl(0, 0%, 100%)'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 98%)'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'hsl(0, 0%, 100%)'}
-                        >
-                          <div className="flex items-center justify-between gap-4 mb-2">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-semibold" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                                  Trace ID #{index + 1}:
-                                </span>
-                                <code
-                                  className="text-xs font-mono truncate"
-                                  style={{ color: 'hsl(330, 3%, 19%)' }}
-                                  title={item.trace_id}
-                                >
-                                  {item.trace_id}
-                                </code>
-                              </div>
-                            </div>
-                            <div
-                              className="px-3 py-1 rounded text-sm font-semibold whitespace-nowrap"
-                              style={{
-                                backgroundColor: itemColors.bg,
-                                borderWidth: '1px',
-                                borderColor: itemColors.border,
-                                color: itemColors.text
-                              }}
-                            >
-                              {itemScore}
-                            </div>
-                          </div>
-                          <div
-                            className="h-2 rounded-full overflow-hidden"
-                            style={{ backgroundColor: 'hsl(0, 0%, 92%)' }}
-                          >
-                            <div
-                              className="h-full rounded-full transition-all duration-300"
-                              style={{
-                                width: `${item.cosine_similarity * 100}%`,
-                                backgroundColor: itemColors.text
-                              }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-          </div>
-
-          {/* Footer */}
-          <div className="px-6 py-4 border-t flex items-center justify-between" style={{ borderColor: 'hsl(0, 0%, 85%)', backgroundColor: 'hsl(0, 0%, 98%)' }}>
-            <button
-              onClick={handleExportCSV}
-              disabled={!hasScore}
-              className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-              style={{
-                borderWidth: '1px',
-                borderColor: hasScore ? 'hsl(167, 59%, 22%)' : 'hsl(0, 0%, 85%)',
-                backgroundColor: hasScore ? 'hsl(167, 59%, 95%)' : 'hsl(0, 0%, 95%)',
-                color: hasScore ? 'hsl(167, 59%, 22%)' : 'hsl(330, 3%, 49%)',
-                cursor: hasScore ? 'pointer' : 'not-allowed'
-              }}
-              onMouseEnter={(e) => {
-                if (hasScore) e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 90%)';
-              }}
-              onMouseLeave={(e) => {
-                if (hasScore) e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 95%)';
-              }}
-            >
-              Export CSV
-            </button>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-              style={{
-                backgroundColor: 'hsl(167, 59%, 22%)',
-                color: 'hsl(0, 0%, 100%)'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 28%)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'hsl(167, 59%, 22%)'}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Config Modal */}
-      <ConfigModal
-        isOpen={isConfigModalOpen}
-        onClose={() => setIsConfigModalOpen(false)}
-        job={job}
-        assistantConfig={assistantConfig}
-      />
-    </>
-  );
-}
-
 // ============ EVAL JOB CARD COMPONENT ============
 interface EvalJobCardProps {
   job: EvalJob;
@@ -1548,8 +1142,8 @@ interface EvalJobCardProps {
 }
 
 function EvalJobCard({ job, assistantConfig }: EvalJobCardProps) {
+  const router = useRouter();
   const [isExpanded, setIsExpanded] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
 
   // Using imported utility functions
@@ -1662,7 +1256,7 @@ function EvalJobCard({ job, assistantConfig }: EvalJobCardProps) {
               View Config
             </button>
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => router.push(`/evaluations/${job.id}`)}
               className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
               style={{
                 backgroundColor: 'hsl(167, 59%, 22%)',
@@ -1677,11 +1271,6 @@ function EvalJobCard({ job, assistantConfig }: EvalJobCardProps) {
         </div>
       )}
 
-      {/* Results Modal */}
-      {isModalOpen && (
-        <ResultsModal job={job} assistantConfig={assistantConfig} onClose={() => setIsModalOpen(false)} />
-      )}
-
       {/* Config Modal */}
       <ConfigModal
         isOpen={isConfigModalOpen}
@@ -1690,5 +1279,37 @@ function EvalJobCard({ job, assistantConfig }: EvalJobCardProps) {
         assistantConfig={assistantConfig}
       />
     </div>
+  );
+}
+
+// Wrapper component with Suspense
+export default function SimplifiedEval() {
+  return (
+    <Suspense fallback={
+      <div className="w-full h-screen flex items-center justify-center" style={{ backgroundColor: 'hsl(42, 63%, 94%)' }}>
+        <div className="text-center">
+          <div className="animate-pulse" style={{ color: 'hsl(330, 3%, 49%)' }}>
+            <svg
+              className="mx-auto h-12 w-12 mb-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            <p className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>
+              Loading...
+            </p>
+          </div>
+        </div>
+      </div>
+    }>
+      <SimplifiedEvalContent />
+    </Suspense>
   );
 }
