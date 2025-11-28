@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { APIKey, STORAGE_KEY } from '../../keystore/page';
-import { EvalJob, AssistantConfig, isNewScoreObject, isLegacyScoreObject, getScoreObject } from '../../components/types';
+import { EvalJob, AssistantConfig, isNewScoreObject, isNewScoreObjectV2, getScoreObject, normalizeToIndividualScores } from '../../components/types';
 import { formatDate, getStatusColor } from '../../components/utils';
 import ConfigModal from '../../components/ConfigModal';
 import Sidebar from '../../components/Sidebar';
@@ -130,37 +130,46 @@ export default function EvaluationReport() {
       return;
     }
 
-    // Handle new score format
-    if (isNewFormat && scoreObject.individual_scores) {
+    try {
+      // Normalize to individual scores format (supports both new formats)
+      const individual_scores = normalizeToIndividualScores(scoreObject);
+
+      if (!individual_scores || individual_scores.length === 0) {
+        alert('No valid data available to export');
+        return;
+      }
+
       // Build CSV content
       let csvContent = 'data:text/csv;charset=utf-8,';
 
       // Get all score names for header
-      const firstItem = scoreObject.individual_scores[0];
+      const firstItem = individual_scores[0];
       const scoreNames = firstItem?.trace_scores?.map(s => s.name) || [];
 
       // Header row
-      csvContent += 'Job ID,Run Name,Dataset,Model,Assistant ID,Assistant Name,Status,Total Items,';
+      csvContent += 'Trace ID,Job ID,Run Name,Dataset,Model,Status,Total Items,';
       csvContent += 'Question,Answer,Ground Truth,';
-      csvContent += scoreNames.join(',') + '\n';
+      csvContent += scoreNames.map(name => `${name},${name} (comment)`).join(',') + '\n';
 
       // Data rows
-      scoreObject.individual_scores.forEach((item) => {
+      individual_scores.forEach((item) => {
         const row = [
+          item.trace_id || 'N/A',
           job.id,
           `"${job.run_name.replace(/"/g, '""')}"`,
           `"${job.dataset_name.replace(/"/g, '""')}"`,
           assistantConfig?.model || job.config?.model || 'N/A',
-          job.assistant_id || 'N/A',
-          assistantConfig?.name ? `"${assistantConfig.name.replace(/"/g, '""')}"` : 'N/A',
           job.status,
           job.total_items,
-          `"${(item.input?.question || '').replace(/"/g, '""')}"`,
-          `"${(item.output?.answer || '').replace(/"/g, '""')}"`,
-          `"${(item.metadata?.ground_truth || '').replace(/"/g, '""')}"`,
-          ...scoreNames.map(name => {
-            const score = item.trace_scores.find(s => s.name === name);
-            return score ? score.value : 'N/A';
+          `"${(item.input?.question || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
+          `"${(item.output?.answer || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
+          `"${(item.metadata?.ground_truth || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`,
+          ...scoreNames.flatMap(name => {
+            const score = item.trace_scores?.find(s => s.name === name);
+            return [
+              score ? score.value : 'N/A',
+              score?.comment ? `"${score.comment.replace(/"/g, '""').replace(/\n/g, ' ')}"` : ''
+            ];
           })
         ].join(',');
 
@@ -175,67 +184,10 @@ export default function EvaluationReport() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      return;
+    } catch (error) {
+      console.error('Error exporting CSV:', error);
+      alert('Failed to export CSV. Please check the console for details.');
     }
-
-    // Handle legacy format
-    if (isLegacyFormat && scoreObject.cosine_similarity) {
-      const { cosine_similarity } = scoreObject;
-
-      if (!Array.isArray(cosine_similarity.per_item_scores) ||
-          typeof cosine_similarity.avg !== 'number' ||
-          typeof cosine_similarity.std !== 'number') {
-        alert('No valid data available to export');
-        return;
-      }
-
-      // Build CSV content
-      let csvContent = 'data:text/csv;charset=utf-8,';
-
-      // Header row
-      csvContent += 'Job ID,Run Name,Dataset,Model,Assistant ID,Assistant Name,Temperature,Status,Total Items,';
-      csvContent += 'Average Similarity,Standard Deviation,Total Q&A Pairs,';
-      csvContent += 'Trace ID,Item Similarity Score\n';
-
-      // Data rows - one row per item
-      cosine_similarity.per_item_scores.forEach((item) => {
-        // Skip items with invalid data
-        if (!item || typeof item.cosine_similarity !== 'number') {
-          return;
-        }
-
-        const row = [
-          job.id,
-          `"${job.run_name}"`,
-          `"${job.dataset_name}"`,
-          assistantConfig?.model || job.config?.model || 'N/A',
-          job.assistant_id || 'N/A',
-          assistantConfig?.name ? `"${assistantConfig.name}"` : 'N/A',
-          assistantConfig?.temperature !== undefined ? assistantConfig.temperature : 'N/A',
-          job.status,
-          job.total_items,
-          cosine_similarity.avg.toFixed(2),
-          cosine_similarity.std.toFixed(2),
-          cosine_similarity.total_pairs,
-          item.trace_id || 'N/A',
-          item.cosine_similarity.toFixed(2)
-        ].join(',');
-
-        csvContent += row + '\n';
-      });
-
-      // Create download link
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `evaluation_${job.id}_${job.run_name.replace(/[^a-z0-9]/gi, '_')}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      return;
-    }
-
-    alert('Unsupported score format for export');
   };
 
 
@@ -304,9 +256,13 @@ export default function EvaluationReport() {
   const hasScore = !!scoreObject;
   const statusColors = getStatusColor(job.status);
 
-  // Check if we have new or legacy score structure
-  const isNewFormat = isNewScoreObject(scoreObject);
-  const isLegacyFormat = isLegacyScoreObject(scoreObject);
+  // Check if we have new score structure (V1 or V2)
+  const isNewFormat = isNewScoreObject(scoreObject) || isNewScoreObjectV2(scoreObject);
+
+  // Safe access to summary scores
+  const summaryScores = (isNewFormat && scoreObject && 'summary_scores' in scoreObject)
+    ? scoreObject.summary_scores || []
+    : [];
 
   return (
     <div className="w-full h-screen flex flex-col" style={{ backgroundColor: 'hsl(42, 63%, 94%)' }}>
@@ -435,7 +391,7 @@ export default function EvaluationReport() {
           </div>
 
           {/* Scrollable Content */}
-          <div className="flex-1 overflow-auto p-6" style={{ backgroundColor: 'hsl(42, 63%, 94%)' }}>
+          <div className="flex overflow-auto p-6" style={{ backgroundColor: 'hsl(42, 63%, 94%)' }}>
             <div className="max-w-8xl mx-auto space-y-6">
               {/* Summary Section */}
               <div>
@@ -489,8 +445,13 @@ export default function EvaluationReport() {
                     <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Metrics Overview</h3>
                   </div>
                   <div className="border rounded-lg p-6" style={{ backgroundColor: 'hsl(0, 0%, 100%)', borderColor: 'hsl(0, 0%, 85%)' }}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {scoreObject.summary_scores.filter(s => s.data_type === 'NUMERIC').map((summary) => (
+                    {summaryScores.length > 0 ? (
+                      <div className={
+                        summaryScores.length === 2
+                        ? "flex justify-around items-start gap-6"
+                        : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+                      }>
+                        {summaryScores.filter(s => s.data_type === 'NUMERIC').map((summary) => (
                         <div key={summary.name} className="text-center">
                           <div className="text-xs uppercase font-semibold mb-3" style={{ color: 'hsl(330, 3%, 49%)' }}>{summary.name}</div>
                           <div className="text-3xl font-bold" style={{ color: 'hsl(167, 59%, 22%)' }}>
@@ -505,55 +466,29 @@ export default function EvaluationReport() {
                             {summary.total_pairs} pairs
                           </div>
                         </div>
-                      ))}
-                      {scoreObject.summary_scores.filter(s => s.data_type === 'CATEGORICAL').map((summary) => (
-                        <div key={summary.name} className="text-center">
-                          <div className="text-xs uppercase font-semibold mb-3" style={{ color: 'hsl(330, 3%, 49%)' }}>{summary.name}</div>
-                          <div className="text-left">
-                            {summary.distribution && Object.entries(summary.distribution).map(([key, value]) => (
-                              <div key={key} className="flex justify-between items-center px-3 py-1 mb-1 rounded" style={{ backgroundColor: 'hsl(0, 0%, 98%)' }}>
-                                <span className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{key}</span>
-                                <span className="text-sm font-bold" style={{ color: 'hsl(167, 59%, 22%)' }}>{value}</span>
-                              </div>
-                            ))}
+                        ))}
+                        {summaryScores.filter(s => s.data_type === 'CATEGORICAL').map((summary) => (
+                          <div key={summary.name} className="text-center">
+                            <div className="text-xs uppercase font-semibold mb-3" style={{ color: 'hsl(330, 3%, 49%)' }}>{summary.name}</div>
+                            <div className="text-left">
+                              {summary.distribution && Object.entries(summary.distribution).map(([key, value]) => (
+                                <div key={key} className="flex justify-between items-center px-3 py-1 mb-1 rounded" style={{ backgroundColor: 'hsl(0, 0%, 98%)' }}>
+                                  <span className="text-sm font-medium" style={{ color: 'hsl(330, 3%, 19%)' }}>{key}</span>
+                                  <span className="text-sm font-bold" style={{ color: 'hsl(167, 59%, 22%)' }}>{value}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="text-xs mt-2" style={{ color: 'hsl(330, 3%, 49%)' }}>
+                              {summary.total_pairs} pairs
+                            </div>
                           </div>
-                          <div className="text-xs mt-2" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                            {summary.total_pairs} pairs
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : hasScore && isLegacyFormat ? (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Metrics Overview</h3>
-                  </div>
-                  <div className="border rounded-lg p-6" style={{ backgroundColor: 'hsl(0, 0%, 100%)', borderColor: 'hsl(0, 0%, 85%)' }}>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                      <div className="text-center">
-                        <div className="text-xs uppercase font-semibold mb-3" style={{ color: 'hsl(330, 3%, 49%)' }}>Average Similarity</div>
-                        <div className="text-4xl font-bold" style={{ color: 'hsl(167, 59%, 22%)' }}>
-                          {scoreObject.cosine_similarity.avg.toFixed(2)}
-                        </div>
+                        ))}
                       </div>
-                      <div className="text-center">
-                        <div className="text-xs uppercase font-semibold mb-3" style={{ color: 'hsl(330, 3%, 49%)' }}>Standard Deviation</div>
-                        <div className="text-4xl font-bold" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                          ±{scoreObject.cosine_similarity.std.toFixed(2)}
-                        </div>
+                    ) : (
+                      <div className="text-center py-4" style={{ color: 'hsl(330, 3%, 49%)' }}>
+                        <p className="text-sm">No summary scores available</p>
                       </div>
-                      <div className="text-center">
-                        <div className="text-xs uppercase font-semibold mb-3" style={{ color: 'hsl(330, 3%, 49%)' }}>Total Q&A Pairs</div>
-                        <div className="text-4xl font-bold" style={{ color: 'hsl(330, 3%, 19%)' }}>
-                          {scoreObject.cosine_similarity.total_pairs}
-                        </div>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -577,9 +512,9 @@ export default function EvaluationReport() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                     </svg>
                     <h3 className="text-lg font-semibold" style={{ color: 'hsl(330, 3%, 19%)' }}>Detailed Results</h3>
-                    {isNewFormat && scoreObject.individual_scores && (
+                    {isNewFormat && (
                       <span className="text-sm" style={{ color: 'hsl(330, 3%, 49%)' }}>
-                        ({scoreObject.individual_scores.length} items)
+                        ({normalizeToIndividualScores(scoreObject).length} items)
                       </span>
                     )}
                   </div>

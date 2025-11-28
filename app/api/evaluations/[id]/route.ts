@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 // Set to true to use mock data, false to use real backend
-const USE_MOCK_DATA = true;
+const USE_MOCK_DATA = false;
 
 /**
  * GET /api/evaluations/[id]
@@ -28,6 +28,9 @@ export async function GET(
         let mockFileName = 'evaluation-sample-1.json';
         if (id === '44' || id === '2') {
           mockFileName = 'evaluation-sample-2.json';
+        } else if (id === '10' || id === '3') {
+          // Use the new schema for ID 10 (from the JSON) or ID 3
+          mockFileName = 'evaluation-sample-3.json';
         }
 
         const filePath = path.join(process.cwd(), 'public', 'mock-data', mockFileName);
@@ -48,15 +51,42 @@ export async function GET(
     // Real backend mode
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
-    const response = await fetch(`${backendUrl}/api/v1/evaluations/${id}`, {
+    // Build URL with default query parameters
+    const url = new URL(`${backendUrl}/api/v1/evaluations/${id}`);
+    url.searchParams.set('get_trace_info', 'true');
+    url.searchParams.set('resync_score', 'false');
+
+    console.log(`[REAL BACKEND] Fetching evaluation ${id} from ${url.toString()}`);
+
+    const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
         'X-API-KEY': apiKey,
       },
     });
 
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[REAL BACKEND] Error response: ${errorText}`);
+      return NextResponse.json(
+        { error: `Backend error: ${response.statusText}`, details: errorText },
+        { status: response.status }
+      );
+    }
+
     const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+
+    // Validate that we received valid data
+    if (!data || typeof data !== 'object') {
+      console.error('[REAL BACKEND] Invalid response format');
+      return NextResponse.json(
+        { error: 'Invalid response format from backend' },
+        { status: 500 }
+      );
+    }
+
+    console.log(`[REAL BACKEND] Successfully fetched evaluation ${id}`);
+    return NextResponse.json(data, { status: 200 });
   } catch (error: any) {
     console.error('Proxy error:', error);
     return NextResponse.json(
